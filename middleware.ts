@@ -35,6 +35,7 @@ const PUBLIC_PATHS = [
   "/api/cron/leave-reminders",
   // Vercel Cron (midnight IST) — auth is enforced inside the route.
   "/api/admin/sync-attendance-to-sheets",
+  "/api/branding/public",
 ];
 
 const NETWORK_GATE_ALLOWED_PATHS = [

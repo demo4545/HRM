@@ -4,6 +4,7 @@ import { getBrandingAssetBytes } from "@/lib/branding";
 import { toApiErrorMessage } from "@/lib/api/user-facing-error";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 /** Public company logo stream for favicon (no auth). */
 export async function GET() {

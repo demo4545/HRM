@@ -4,6 +4,7 @@ import { getCompanyBranding } from "@/lib/branding";
 import { toApiErrorMessage } from "@/lib/api/user-facing-error";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 /**
  * Public branding snapshot for browser tab title / favicon (no auth).
