@@ -12,6 +12,11 @@ export const runtime = "nodejs";
  *   /api/branding/public/favicon?scheme=dark   → inverted (light) logo
  */
 export async function GET(req: NextRequest) {
-  const scheme = parseFaviconScheme(req.nextUrl.searchParams.get("scheme"));
-  return renderSchemeFavicon(scheme);
+  try {
+    const scheme = parseFaviconScheme(req.nextUrl.searchParams.get("scheme"));
+    return await renderSchemeFavicon(scheme);
+  } catch (error) {
+    console.error("GET Public Branding Favicon Error:", error);
+    return new Response(null, { status: 204 });
+  }
 }
