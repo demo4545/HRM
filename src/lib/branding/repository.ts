@@ -53,6 +53,14 @@ function toPublicBranding(raw: Record<string, unknown>): CompanyBranding {
   };
 }
 
+function scheduleCompanyBrandingSheetSync(): void {
+  void import("./sync-to-sheets")
+    .then(({ syncCompanyBrandingToSheets }) => syncCompanyBrandingToSheets())
+    .catch((error) => {
+      console.error("[sync-company-branding-to-sheets]", error);
+    });
+}
+
 export function clearCompanyBrandingCache(): void {
   brandingCache = null;
   brandingInflight = null;
@@ -116,6 +124,7 @@ export async function updateCompanyBranding(
 
   await ref.set(next, { merge: true });
   clearCompanyBrandingCache();
+  scheduleCompanyBrandingSheetSync();
   return getCompanyBranding();
 }
 
@@ -144,6 +153,7 @@ export async function saveBrandingAsset(
   );
   await batch.commit();
   clearCompanyBrandingCache();
+  scheduleCompanyBrandingSheetSync();
   return getCompanyBranding();
 }
 
@@ -165,6 +175,7 @@ export async function clearBrandingAsset(
   );
   await batch.commit();
   clearCompanyBrandingCache();
+  scheduleCompanyBrandingSheetSync();
   return getCompanyBranding();
 }
 

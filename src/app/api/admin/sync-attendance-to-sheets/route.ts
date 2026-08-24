@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { syncAttendanceToSheets } from "@/lib/attendance/sync-attendance-to-sheets";
+import { syncCompanyBrandingToSheets } from "@/lib/branding/sync-to-sheets";
 
 export const dynamic = "force-dynamic";
 /** Allow enough time for per-employee Sheets writes (throttled). */
@@ -42,12 +43,19 @@ export async function POST(req: Request) {
     const url = new URL(req.url);
     const body = (await req.json().catch(() => ({}))) as { fromIso?: string; toIso?: string };
 
-    const result = await syncAttendanceToSheets({
-      fromIso: body.fromIso ?? url.searchParams.get("from") ?? undefined,
-      toIso: body.toIso ?? url.searchParams.get("to") ?? undefined,
-    });
+    const [attendance, branding] = await Promise.all([
+      syncAttendanceToSheets({
+        fromIso: body.fromIso ?? url.searchParams.get("from") ?? undefined,
+        toIso: body.toIso ?? url.searchParams.get("to") ?? undefined,
+      }),
+      syncCompanyBrandingToSheets(),
+    ]);
 
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({
+      success: true,
+      attendance,
+      branding,
+    });
   } catch (error) {
     console.error("[sync-attendance-to-sheets]", error);
     return NextResponse.json(

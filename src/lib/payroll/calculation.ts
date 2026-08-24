@@ -7,7 +7,11 @@ import {
   HOURS_PER_DAY,
 } from "@/lib/payroll/constants";
 import { summarizeAttendanceDays, type PayrollAttendanceDay } from "@/lib/payroll/attendance-codes";
-import { calculateSalaryBreakdown, proratedEarningsTotal } from "@/lib/salary-slips/calculation";
+import {
+  calculateSalaryBreakdown,
+  proratedEarningsTotal,
+  resolveSalaryEarningsComponents,
+} from "@/lib/salary-slips/calculation";
 
 function round2(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -91,10 +95,18 @@ export function sumApprovedOvertimeMs(attendanceByDate: Map<string, PayrollAtten
  * Paid leave (Paid / Sick / Casual / Half Day Paid) does not reduce pay.
  */
 export function calculateEmployeePayroll(input: PayrollEmployeeInput): PayrollEmployeeResult {
-  const basic = Math.max(0, Number(input.basic ?? input.monthlySalary) || 0);
-  const hra = Math.max(0, Number(input.hra) || 0);
-  const organizationAllowance = Math.max(0, Number(input.organizationAllowance) || 0);
-  const grossMonthly = round2(basic + hra + organizationAllowance);
+  const storedBasic = Math.max(0, Number(input.basic ?? input.monthlySalary) || 0);
+  const storedHra = Math.max(0, Number(input.hra) || 0);
+  const storedOrg = Math.max(0, Number(input.organizationAllowance) || 0);
+  const earnings = resolveSalaryEarningsComponents({
+    basic: storedBasic,
+    hra: storedHra,
+    organizationAllowance: storedOrg,
+  });
+  const basic = earnings.basic;
+  const hra = earnings.hra;
+  const organizationAllowance = earnings.organizationAllowance;
+  const grossMonthly = round2(earnings.totalGross);
   const workingDays = Math.max(0, Number(input.workingDays) || 0);
   const loyaltyPercent =
     input.loyaltyPercent != null && Number.isFinite(input.loyaltyPercent)
@@ -118,9 +130,9 @@ export function calculateEmployeePayroll(input: PayrollEmployeeInput): PayrollEm
   const paidLeaveAmount = round2(attendance.totalPaidLeave * perDay);
 
   const breakdown = calculateSalaryBreakdown({
-    basic,
-    hra,
-    organizationAllowance,
+    basic: storedBasic,
+    hra: storedHra,
+    organizationAllowance: storedOrg,
     loyaltyBonus: loyaltyPercent,
     professionalTax,
     lwf,
@@ -134,13 +146,13 @@ export function calculateEmployeePayroll(input: PayrollEmployeeInput): PayrollEm
   const overtimeAmount = round2((overtimeMs / (1000 * 60 * 60)) * perHour);
 
   const amountAfterAttendance = proratedEarningsTotal({
-    basic,
-    hra,
-    organizationAllowance,
+    basic: storedBasic,
+    hra: storedHra,
+    organizationAllowance: storedOrg,
     workingDays,
     netPayableDays: payableDayWeight,
   });
-  const loyaltyBonus = round2((basic * loyaltyPercent) / 100);
+  const loyaltyBonus = round2((grossMonthly * loyaltyPercent) / 100);
   const pt = breakdown.professionalTax;
   const lwfAmount = breakdown.lwf;
 

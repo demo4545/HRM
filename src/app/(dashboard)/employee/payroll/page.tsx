@@ -92,9 +92,7 @@ type TableRow = {
   employeeId: string;
   name: string;
   designation: string;
-  basic: string;
-  hra: string;
-  organizationAllowance: string;
+  totalSalary: string;
   perDay: string;
   workingDays: string;
   attendDays: string;
@@ -254,9 +252,7 @@ export default function PayrollPage() {
           employeeId: employee.employeeId || "—",
           name: employee.name || "—",
           designation: formatDesignation(employee.designation ?? ""),
-          basic: "—",
-          hra: "—",
-          organizationAllowance: "—",
+          totalSalary: "—",
           perDay: "—",
           workingDays: "—",
           attendDays: "—",
@@ -281,9 +277,7 @@ export default function PayrollPage() {
         employeeId: employee.employeeId || "—",
         name: employee.name || "—",
         designation: formatDesignation(employee.designation ?? ""),
-        basic: formatInr(payroll.basic),
-        hra: formatInr(payroll.hra),
-        organizationAllowance: formatInr(payroll.organizationAllowance),
+        totalSalary: formatInr(payroll.monthlySalary),
         perDay: formatInr(payroll.perDay),
         workingDays: formatDayCount(payroll.workingDays),
         attendDays: formatDayCount(payroll.attendDays),
@@ -316,9 +310,7 @@ export default function PayrollPage() {
         header: "Designation",
         render: (row) => <span className="capitalize">{row.designation}</span>,
       },
-      { key: "basic", header: "Basic" },
-      { key: "hra", header: "HRA" },
-      { key: "organizationAllowance", header: "Organization Allowance" },
+      { key: "totalSalary", header: "Total salary" },
       { key: "perDay", header: "Per Day" },
       { key: "workingDays", header: "Working Days" },
       { key: "attendDays", header: "Attend Days" },
