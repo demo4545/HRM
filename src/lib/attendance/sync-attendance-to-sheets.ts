@@ -10,6 +10,8 @@ import {
 const IST_TIME_ZONE = "Asia/Kolkata";
 const THROTTLE_MS = 150;
 
+const DEFAULT_LOOKBACK_DAYS = 7;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -70,11 +72,12 @@ export async function syncAttendanceToSheets(params?: {
   fromIso?: string;
   toIso?: string;
 }): Promise<SyncAttendanceToSheetsResult> {
-  // Default: sync the previous IST day (the day that just ended at midnight).
+  // Default: previous IST day, plus a short lookback so late auto punch-outs
+  // (closed in Firebase after an earlier Sheets copy) still get overwritten.
   const todayIso = dateIsoInIst();
   const previousDayIso = addDaysIso(todayIso, -1);
   const toIso = params?.toIso?.trim() || previousDayIso;
-  const fromIso = params?.fromIso?.trim() || previousDayIso;
+  const fromIso = params?.fromIso?.trim() || addDaysIso(todayIso, -DEFAULT_LOOKBACK_DAYS);
 
   const dateIsos = iterateIsoDates(fromIso, toIso);
   if (dateIsos.length === 0) {
