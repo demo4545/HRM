@@ -16,3 +16,4 @@ export {
   saveBrandingAsset,
   updateCompanyBranding,
 } from "./repository";
+export { syncCompanyBrandingToSheets } from "./sync-to-sheets";
