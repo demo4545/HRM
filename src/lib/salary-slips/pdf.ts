@@ -153,9 +153,12 @@ export async function renderSalarySlipPdf(input: SlipPdfInput): Promise<Buffer> 
     }
   }
 
-  drawCentered(input.companyName || "Company", y, 10, true);
-  y -= 16;
-  const addressLines = formatSlipAddressLines(input.companyAddress);
+  const companyName = String(input.companyName ?? "").trim();
+  if (companyName) {
+    drawCentered(companyName, y, 10, true);
+    y -= 16;
+  }
+  const addressLines = formatSlipAddressLines(input.companyAddress).filter((line) => line.trim());
   const addressMaxWidth = PAGE_WIDTH - 20;
   for (const line of addressLines) {
     const size = fontSizeToFit(line, bold, 9, addressMaxWidth, 7);

@@ -348,8 +348,8 @@ export const POST = withActiveSession(async (req, user) => {
       const branding = await getCompanyBranding();
       const fileName = `${monthLabel(month)}.pdf`;
       const pdf = await renderSalarySlipPdf({
-        companyName: branding.companyName || "Company",
-        companyAddress: branding.companyAddress,
+        companyName: branding.companyName.trim(),
+        companyAddress: branding.companyAddress.trim(),
         payTitle: `Pay Slip For the Month of ${monthLabel(month)}-${year}`,
         payRange: `(From ${periodStart.split("-").reverse().join("/")} To ${periodEnd.split("-").reverse().join("/")})`,
         employeeName: form.name,

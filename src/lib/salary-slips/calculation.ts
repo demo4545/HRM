@@ -5,6 +5,50 @@ function clampToMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+export type SalaryEarningsComponents = {
+  basic: number;
+  hra: number;
+  organizationAllowance: number;
+  /** Sum of basic + HRA + organization allowance (monthly gross). */
+  totalGross: number;
+};
+
+/**
+ * When HRA / organization allowance are not stored separately, treat `basic` as
+ * total monthly gross and split for slip display:
+ * - Basic = 50% of total
+ * - HRA = 50% of basic (25% of total)
+ * - Organization allowance = 50% of basic (25% of total)
+ *
+ * Legacy rows with explicit HRA / OA values are returned unchanged.
+ */
+export function resolveSalaryEarningsComponents(input: {
+  basic: number;
+  hra?: number;
+  organizationAllowance?: number;
+}): SalaryEarningsComponents {
+  const storedBasic = Math.max(0, Number(input.basic) || 0);
+  const storedHra = Math.max(0, Number(input.hra) || 0);
+  const storedOrg = Math.max(0, Number(input.organizationAllowance) || 0);
+
+  if (storedHra > 0 || storedOrg > 0) {
+    const totalGross = clampToMoney(storedBasic + storedHra + storedOrg);
+    return {
+      basic: clampToMoney(storedBasic),
+      hra: clampToMoney(storedHra),
+      organizationAllowance: clampToMoney(storedOrg),
+      totalGross,
+    };
+  }
+
+  const totalGross = clampToMoney(storedBasic);
+  const basic = clampToMoney(totalGross * 0.5);
+  const hra = clampToMoney(basic * 0.5);
+  const organizationAllowance = clampToMoney(totalGross - basic - hra);
+
+  return { basic, hra, organizationAllowance, totalGross };
+}
+
 /** Earnings after unpaid / mid-month days (used by payroll final pay). */
 export function proratedEarningsTotal(input: {
   basic: number;
@@ -26,21 +70,17 @@ export function proratedEarningsTotal(input: {
 }
 
 export function calculateSalaryBreakdown(input: SalaryBreakdownInput) {
-  const {
-    basic,
-    hra,
-    organizationAllowance,
-    loyaltyBonus,
-    professionalTax,
-    lwf,
-    workingDays,
-    netPayableDays,
-  } = input;
+  const { loyaltyBonus, professionalTax, lwf, workingDays, netPayableDays } = input;
 
-  const earningsBasic = clampToMoney(basic);
-  const earningsHra = clampToMoney(hra || 0);
-  const earningsOrgAllowance = clampToMoney(organizationAllowance || 0);
-  const totalEarnings = clampToMoney(earningsBasic + earningsHra + earningsOrgAllowance);
+  const components = resolveSalaryEarningsComponents({
+    basic: input.basic,
+    hra: input.hra,
+    organizationAllowance: input.organizationAllowance,
+  });
+  const earningsBasic = components.basic;
+  const earningsHra = components.hra;
+  const earningsOrgAllowance = components.organizationAllowance;
+  const totalEarnings = components.totalGross;
 
   const unpaidDays = Math.max(0, workingDays - netPayableDays);
   const unpaidLeaveAmount = clampToMoney(
@@ -52,7 +92,7 @@ export function calculateSalaryBreakdown(input: SalaryBreakdownInput) {
   );
 
   const loyaltyBonusRate = Math.min(100, Math.max(0, loyaltyBonus));
-  const loyaltyBonusAmount = clampToMoney((basic * loyaltyBonusRate) / 100);
+  const loyaltyBonusAmount = clampToMoney((totalEarnings * loyaltyBonusRate) / 100);
   const professionalTaxAmount = clampToMoney(professionalTax);
   const lwfAmount = clampToMoney(lwf);
   const totalDeductions = clampToMoney(

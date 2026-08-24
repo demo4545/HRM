@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/auth-provider";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { canManageEmployees } from "@/lib/auth/roles";
 import { buildFullMonthYearPeriodOptions } from "@/lib/attendance/period-options";
-import { parseEmployeeListApiResponse } from "@/lib/employee";
+import { parseEmployeeListApiResponse, pickSheetRowFields } from "@/lib/employee";
 import type { Column } from "@/types/table";
 
 type SalarySlipRow = {
@@ -36,6 +36,7 @@ type SalarySlipRow = {
 type EmployeeOption = {
   sheetRow: string;
   name: string;
+  salary: string;
 };
 
 type SalaryHistoryRecord = {
@@ -64,9 +65,7 @@ type PendingSalaryRevision = {
 type HistoryTableRow = {
   id: string;
   employee: string;
-  basic: string;
-  hra: string;
-  organizationAllowance: string;
+  totalSalary: string;
   effectiveFrom: string;
   effectiveTo: string;
   period: string;
@@ -81,6 +80,27 @@ function formatInr(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function parseOnboardingSalary(value: string): string {
+  const cleaned = String(value ?? "")
+    .replace(/,/g, "")
+    .replace(/[^\d.]/g, "")
+    .trim();
+  if (!cleaned) return "";
+  const amount = Number(cleaned);
+  if (!Number.isFinite(amount) || amount <= 0) return "";
+  return String(amount);
+}
+
+function historyTotalSalary(record: {
+  basic: number;
+  hra: number;
+  organizationAllowance: number;
+}): number {
+  return (
+    Number(record.basic || 0) + Number(record.hra || 0) + Number(record.organizationAllowance || 0)
+  );
 }
 
 function formatDate(value: string): string {
@@ -141,8 +161,6 @@ export default function SalarySlipsPage() {
   const [historyEmployeeSheetRow, setHistoryEmployeeSheetRow] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [basic, setBasic] = useState("");
-  const [hra, setHra] = useState("");
-  const [organizationAllowance, setOrganizationAllowance] = useState("");
   const [loyaltyBonus, setLoyaltyBonus] = useState("10");
   const [professionalTax, setProfessionalTax] = useState("200");
   const [lwf, setLwf] = useState("6");
@@ -215,10 +233,23 @@ export default function SalarySlipsPage() {
         sheetRows?: number[];
       }>(res, "fetch");
       const list = parseEmployeeListApiResponse(data);
+      const headers = (data.data?.[0] as string[] | undefined) ?? [];
+      const dataRows = (data.data ?? []).slice(1);
+      const sheetRows = data.sheetRows ?? [];
+      const salaryBySheetRow = new Map<string, string>();
+      dataRows.forEach((row, index) => {
+        const sheetRow = String(sheetRows[index] ?? index + 1);
+        const fields = pickSheetRowFields(headers, row, ["salary"]);
+        salaryBySheetRow.set(sheetRow, parseOnboardingSalary(fields.salary ?? ""));
+      });
       setEmployees(
         list
           .filter((e) => e.role.trim().toLowerCase() !== ROLES.SUPER_ADMIN)
-          .map((e) => ({ sheetRow: e.sheetRow, name: `${e.name} (${e.employeeId})` }))
+          .map((e) => ({
+            sheetRow: e.sheetRow,
+            name: `${e.name} (${e.employeeId})`,
+            salary: salaryBySheetRow.get(e.sheetRow) ?? "",
+          }))
           .sort((a, b) => a.name.localeCompare(b.name)),
       );
     } catch (error) {
@@ -292,9 +323,7 @@ export default function SalarySlipsPage() {
       return {
         id: `${record.sheetRow}-${record.employeeSheetRow}-${record.effectiveFrom}-${index}`,
         employee,
-        basic: formatInr(record.basic),
-        hra: formatInr(record.hra),
-        organizationAllowance: formatInr(record.organizationAllowance),
+        totalSalary: formatInr(historyTotalSalary(record)),
         effectiveFrom: formatDate(record.effectiveFrom),
         effectiveTo: formatDate(record.effectiveTo),
         period: `${formatDate(record.effectiveFrom)} → ${formatDate(record.effectiveTo)}`,
@@ -309,9 +338,7 @@ export default function SalarySlipsPage() {
   const historyColumns: Column<HistoryTableRow>[] = useMemo(
     () => [
       { key: "employee", header: "Employee", sortable: true },
-      { key: "basic", header: "Basic salary" },
-      { key: "hra", header: "HRA" },
-      { key: "organizationAllowance", header: "Organization allowance" },
+      { key: "totalSalary", header: "Total Salary" },
       { key: "period", header: "Effective period" },
       { key: "effectiveFrom", header: "Start date" },
       { key: "effectiveTo", header: "End date" },
@@ -380,19 +407,7 @@ export default function SalarySlipsPage() {
     const basicAmount = Number(basic || 0);
     if (!(basicAmount > 0)) {
       setSuccessMessage(null);
-      setError("Enter a basic salary greater than 0.");
-      return;
-    }
-    const hraAmount = Number(hra || 0);
-    if (!(hraAmount > 0)) {
-      setSuccessMessage(null);
-      setError("Enter HRA greater than 0.");
-      return;
-    }
-    const organizationAllowanceAmount = Number(organizationAllowance || 0);
-    if (!(organizationAllowanceAmount > 0)) {
-      setSuccessMessage(null);
-      setError("Enter organization allowance greater than 0.");
+      setError("Enter a salary greater than 0.");
       return;
     }
     const lwfAmount = Number(lwf || 0);
@@ -419,7 +434,7 @@ export default function SalarySlipsPage() {
       const currentPeriod = `${formatDate(latest.effectiveFrom)} → ${formatDate(latest.effectiveTo)}`;
       setPendingRevision({
         employeeLabel,
-        currentBasic: latest.basic,
+        currentBasic: historyTotalSalary(latest),
         currentPeriod,
         newBasic: basicAmount,
         newFrom: formatDate(effectiveFrom),
@@ -432,8 +447,6 @@ export default function SalarySlipsPage() {
       employeeName: employees.find((e) => e.sheetRow === historyEmployeeSheetRow)?.name,
       effectiveFrom,
       basicAmount,
-      hraAmount,
-      organizationAllowanceAmount,
       lwfAmount,
     });
   };
@@ -443,8 +456,6 @@ export default function SalarySlipsPage() {
     employeeName?: string;
     effectiveFrom: string;
     basicAmount: number;
-    hraAmount: number;
-    organizationAllowanceAmount: number;
     lwfAmount: number;
   }) => {
     setBusy(true);
@@ -460,8 +471,8 @@ export default function SalarySlipsPage() {
           employeeName: payload.employeeName,
           effectiveFrom: payload.effectiveFrom,
           basic: payload.basicAmount,
-          hra: payload.hraAmount,
-          organizationAllowance: payload.organizationAllowanceAmount,
+          hra: 0,
+          organizationAllowance: 0,
           loyaltyBonus: Number(loyaltyBonus || 0),
           professionalTax: Number(professionalTax || 0),
           lwf: payload.lwfAmount,
@@ -475,9 +486,14 @@ export default function SalarySlipsPage() {
       if (!data.success) throw new Error(data.message ?? "Failed to save salary history");
       setPendingRevision(null);
       setSuccessMessage("Salary history saved");
-      setBasic("");
-      setHra("");
-      setOrganizationAllowance("");
+      setEmployees((prev) =>
+        prev.map((employee) =>
+          employee.sheetRow === String(payload.selectedRow)
+            ? { ...employee, salary: String(payload.basicAmount) }
+            : employee,
+        ),
+      );
+      setBasic(String(payload.basicAmount));
       setEffectiveFrom("");
       await loadHistory();
     } catch (error) {
@@ -494,8 +510,6 @@ export default function SalarySlipsPage() {
       employeeName: employees.find((e) => e.sheetRow === historyEmployeeSheetRow)?.name,
       effectiveFrom,
       basicAmount: Number(basic || 0),
-      hraAmount: Number(hra || 0),
-      organizationAllowanceAmount: Number(organizationAllowance || 0),
       lwfAmount: Number(lwf || 0),
     });
   };
@@ -638,7 +652,12 @@ export default function SalarySlipsPage() {
                 </p>
                 <Select
                   value={historyEmployeeSheetRow}
-                  onChange={(e) => setHistoryEmployeeSheetRow(e.target.value)}
+                  onChange={(e) => {
+                    const sheetRow = e.target.value;
+                    setHistoryEmployeeSheetRow(sheetRow);
+                    const employee = employees.find((item) => item.sheetRow === sheetRow);
+                    setBasic(employee?.salary ?? "");
+                  }}
                 >
                   <option value="">All</option>
                   {employees.map((e) => (
@@ -661,38 +680,18 @@ export default function SalarySlipsPage() {
               </div>
               <div>
                 <p className="text-ex-muted mt-1.5 max-w-sm text-sm leading-relaxed">
-                  Basic Salary (Rs.)
+                  Total Salary (Rs.)
                 </p>
                 <Input
                   value={basic}
                   onChange={(e) => setBasic(e.target.value)}
-                  placeholder="Basic"
-                  disabled={!historyEmployeeSheetRow}
-                />
-              </div>
-              <div>
-                <p className="text-ex-muted mt-1.5 max-w-sm text-sm leading-relaxed">HRA (Rs.)</p>
-                <Input
-                  value={hra}
-                  onChange={(e) => setHra(e.target.value)}
-                  placeholder="HRA"
+                  placeholder="Total Salary"
                   disabled={!historyEmployeeSheetRow}
                 />
               </div>
               <div>
                 <p className="text-ex-muted mt-1.5 max-w-sm text-sm leading-relaxed">
-                  Organization Allowance (Rs.)
-                </p>
-                <Input
-                  value={organizationAllowance}
-                  onChange={(e) => setOrganizationAllowance(e.target.value)}
-                  placeholder="Organization allowance"
-                  disabled={!historyEmployeeSheetRow}
-                />
-              </div>
-              <div>
-                <p className="text-ex-muted mt-1.5 max-w-sm text-sm leading-relaxed">
-                  Loyalty bonus as a percentage of basic salary.
+                  Loyalty bonus as a percentage of total salary.
                 </p>
                 <Select
                   value={loyaltyBonus}
@@ -730,15 +729,7 @@ export default function SalarySlipsPage() {
             </div>
             <Button
               onClick={() => void addSalaryHistory()}
-              disabled={
-                busy ||
-                !historyEmployeeSheetRow ||
-                !effectiveFrom ||
-                !basic ||
-                !hra ||
-                !organizationAllowance ||
-                !lwf
-              }
+              disabled={busy || !historyEmployeeSheetRow || !effectiveFrom || !basic || !lwf}
             >
               Save salary revision
             </Button>
