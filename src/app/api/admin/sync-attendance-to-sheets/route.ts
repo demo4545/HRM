@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { processForgottenPunchOuts } from "@/lib/attendance/auto-punch-out";
 import { syncAttendanceToSheets } from "@/lib/attendance/sync-attendance-to-sheets";
 import { syncCompanyBrandingToSheets } from "@/lib/branding/sync-to-sheets";
 
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
     const url = new URL(req.url);
     const body = (await req.json().catch(() => ({}))) as { fromIso?: string; toIso?: string };
 
+    const forgottenPunchOuts = await processForgottenPunchOuts();
     const [attendance, branding] = await Promise.all([
       syncAttendanceToSheets({
         fromIso: body.fromIso ?? url.searchParams.get("from") ?? undefined,
@@ -53,6 +55,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
+      forgottenPunchOuts,
       attendance,
       branding,
     });
