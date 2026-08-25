@@ -108,7 +108,7 @@ function computeSummary(rows: AttendanceHistoryRow[]) {
     const overtimeApproval = (row.overtimeApproval ?? "Not considered").trim();
     if (overtimeApproval === "Accepted") {
       overtimeApproved++;
-      approvedOvertimeMs += parseDurationToMs((row.overtime ?? "").replace(/^-/, ""));
+      approvedOvertimeMs += Math.max(0, parseDurationToMs(row.overtime ?? ""));
     } else if (overtimeApproval === "Pending") {
       overtimePending++;
     } else if (overtimeApproval === "Rejected") {

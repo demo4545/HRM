@@ -370,6 +370,8 @@ function rowFromValues(values: string[], sheetRow: number): AttendanceRow {
   const punchOut = values[ATTENDANCE_COL.punchOut] ?? "";
   const punchedOut = Boolean(punchOut.trim());
   const workMode = values[ATTENDANCE_COL.workMode] ?? WORK_MODE.FULL_DAY_ONSITE;
+  const overtimeApproval =
+    values[ATTENDANCE_COL.isOvertimeApproved] ?? OVERTIME_APPROVAL.NOT_CONSIDERED;
   const totalBreakTime = resolveTotalBreakTimeFromClocks({
     breakStart: values[ATTENDANCE_COL.breakStart] ?? "",
     breakEnd: values[ATTENDANCE_COL.breakEnd] ?? "",
@@ -387,11 +389,22 @@ function rowFromValues(values: string[], sheetRow: number): AttendanceRow {
     punchedOut,
     workMode,
   });
+
+  // Prefer persisted WH / OT / status so totals match column H/J (not a live recompute
+  // that ignores a break already baked into stored working hours).
+  const storedWorkingHours = (values[ATTENDANCE_COL.workingHours] ?? "").trim();
+  const useStored = punchedOut && storedWorkingHours.length > 0;
+  const workingHours = punchedOut ? (useStored ? storedWorkingHours : metrics.workingHours) : "";
+  const overtime = punchedOut
+    ? useStored
+      ? (values[ATTENDANCE_COL.overtime] ?? "").trim() || "—"
+      : metrics.overtime
+    : "—";
   const status = punchedOut
     ? resolveAttendanceStatus(
-        metrics.status,
-        values[ATTENDANCE_COL.isOvertimeApproved] ?? OVERTIME_APPROVAL.NOT_CONSIDERED,
-        metrics.overtime,
+        useStored ? (values[ATTENDANCE_COL.status] ?? "").trim() || metrics.status : metrics.status,
+        overtimeApproval,
+        overtime,
       )
     : (values[ATTENDANCE_COL.status] ?? WORKING_STATUS.IN_PROGRESS);
 
@@ -404,16 +417,15 @@ function rowFromValues(values: string[], sheetRow: number): AttendanceRow {
     breakStart: values[ATTENDANCE_COL.breakStart] ?? "",
     breakEnd: values[ATTENDANCE_COL.breakEnd] ?? "",
     totalBreakTime,
-    workingHours: punchedOut ? metrics.workingHours : "",
+    workingHours,
     status,
-    overtime: punchedOut ? metrics.overtime : "—",
+    overtime,
     earlyLeaveReason:
       punchedOut && status !== WORKING_STATUS.SHORT
         ? ""
         : (values[ATTENDANCE_COL.earlyLeaveReason] ?? ""),
     dailyUpdate: values[ATTENDANCE_COL.dailyUpdate] ?? "",
-    isOvertimeApproved:
-      values[ATTENDANCE_COL.isOvertimeApproved] ?? OVERTIME_APPROVAL.NOT_CONSIDERED,
+    isOvertimeApproved: overtimeApproval,
   };
 }
 
