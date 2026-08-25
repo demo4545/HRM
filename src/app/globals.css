@@ -171,3 +171,8 @@
   color: var(--ex-primary) !important;
   font-size: 12px !important;
 }
+
+.recharts-sector,
+.recharts-rectangle {
+  outline: none;
+}

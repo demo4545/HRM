@@ -146,9 +146,8 @@ export function summarizeEmployeePerformance(
     const workMode = canonicalizeWorkMode(record.workMode);
     const status = String(record.status ?? "").trim() || "Unknown";
     const punchIn = String(record.punchIn ?? "").trim();
-    const dayWorkedMs = Math.max(0, parseDurationToMs(record.workingHours));
-    // Shortfall is stored as negative overtime (e.g. "-4h 27m"). Only real OT counts.
-    const dayOvertimeMs = Math.max(0, parseDurationToMs(record.overtime));
+    const dayWorkedMs = parseDurationToMs(record.workingHours);
+    const dayOvertimeMs = parseDurationToMs(record.overtime);
     const approved = String(record.isOvertimeApproved ?? "").trim() === OVERTIME_APPROVAL.ACCEPTED;
 
     workedMs += dayWorkedMs;

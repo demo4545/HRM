@@ -8,7 +8,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -92,6 +91,58 @@ const EMPTY_SUMMARY: EmployeePerformanceSummary = {
 };
 
 const EMPTY_MIX: NamedCount[] = [{ name: " ", value: 1 }];
+const LEGEND_DIMMED_OPACITY = 0.45;
+const CHART_LEGEND_CLASS = "[&_.recharts-sector]:outline-none [&_.recharts-rectangle]:outline-none";
+
+type ChartLegendItem = {
+  key: string;
+  label: string;
+  color: string;
+};
+
+function ChartLegend({
+  items,
+  selected,
+  onSelect,
+}: {
+  items: ChartLegendItem[];
+  selected: string | null;
+  onSelect: (key: string) => void;
+}) {
+  return (
+    <ul className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+      {items.map((item) => {
+        const isSelected = selected === item.key;
+        const isDimmed = Boolean(selected && !isSelected);
+        return (
+          <li key={item.key}>
+            <button
+              type="button"
+              className="text-ex-secondary inline-flex cursor-pointer items-center gap-2 border-0 bg-transparent p-0 leading-none"
+              style={{ opacity: isDimmed ? LEGEND_DIMMED_OPACITY : 1 }}
+              onClick={() => onSelect(item.key)}
+            >
+              <span
+                className="h-3 w-3 shrink-0 rounded-none"
+                style={{ backgroundColor: item.color }}
+                aria-hidden
+              />
+              <span
+                className={isSelected ? "leading-none font-semibold" : "leading-none font-normal"}
+              >
+                {item.label}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function toggleHighlight(current: string | null, next: string) {
+  return current === next ? null : next;
+}
 
 function ChartTooltip({
   active,
@@ -143,16 +194,31 @@ function MixChart({
   data: NamedCount[];
   loading?: boolean;
 }) {
+  const [highlighted, setHighlighted] = useState<string | null>(null);
   const isEmpty = data.length === 0;
   const chartData = isEmpty ? EMPTY_MIX : data;
+  const visibleData =
+    isEmpty || !highlighted ? chartData : chartData.filter((entry) => entry.name === highlighted);
+
+  const handleSelect = (name: string) => {
+    if (isEmpty || !name.trim()) return;
+    setHighlighted((prev) => toggleHighlight(prev, name));
+  };
+
+  const legendItems: ChartLegendItem[] = chartData.map((entry, index) => ({
+    key: entry.name,
+    label: entry.name,
+    color: isEmpty ? "var(--ex-border)" : CHART_COLORS[index % CHART_COLORS.length],
+  }));
+
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-ex-secondary">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="h-72">
+      <CardContent className={isEmpty || loading ? "h-72" : ""}>
         {loading ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4">
+          <div className="flex h-72 flex-col items-center justify-center gap-4">
             <Skeleton className="size-44" />
             <div className="flex gap-3">
               <Skeleton className="h-3 w-14" />
@@ -161,26 +227,129 @@ function MixChart({
             </div>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={chartData}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={52}
-                outerRadius={88}
-              >
-                {chartData.map((entry, index) => (
-                  <Cell
-                    key={`${entry.name}-${index}`}
-                    fill={isEmpty ? "var(--ex-border)" : CHART_COLORS[index % CHART_COLORS.length]}
+          <>
+            <div className={`h-64 ${CHART_LEGEND_CLASS}`}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={visibleData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={52}
+                    outerRadius={88}
+                    cursor={isEmpty ? "default" : "pointer"}
+                    onClick={(entry: { name?: string }) => {
+                      if (entry?.name) handleSelect(entry.name);
+                    }}
+                  >
+                    {visibleData.map((entry) => {
+                      const colorIndex = chartData.findIndex((item) => item.name === entry.name);
+                      return (
+                        <Cell
+                          key={entry.name}
+                          fill={
+                            isEmpty
+                              ? "var(--ex-border)"
+                              : CHART_COLORS[colorIndex % CHART_COLORS.length]
+                          }
+                          stroke="none"
+                          strokeWidth={0}
+                          style={{ outline: "none" }}
+                        />
+                      );
+                    })}
+                  </Pie>
+                  {isEmpty ? null : <Tooltip content={<ChartTooltip />} />}
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            {isEmpty ? null : (
+              <ChartLegend items={legendItems} selected={highlighted} onSelect={handleSelect} />
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function HoursChart({
+  data,
+  title,
+  loading = false,
+}: {
+  data: HoursPoint[];
+  title: string;
+  loading?: boolean;
+}) {
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+
+  const legendItems: ChartLegendItem[] = [
+    { key: "hours", label: "Working hours", color: "var(--ex-chart-1)" },
+    { key: "overtimeHours", label: "Overtime hours", color: "var(--ex-chart-3)" },
+  ];
+
+  const handleSelect = (dataKey: string) => {
+    if (dataKey !== "hours" && dataKey !== "overtimeHours") return;
+    setHighlighted((prev) => toggleHighlight(prev, dataKey));
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-ex-secondary">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className={loading ? "h-80" : ""}>
+        {loading ? (
+          <Skeleton className="h-full w-full rounded-xl" />
+        ) : (
+          <>
+            <div className={`h-72 ${CHART_LEGEND_CLASS}`}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data} margin={{ left: 12, right: 8, top: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--ex-border)" vertical={false} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    width={56}
+                    tickMargin={8}
+                    label={{
+                      value: "Hours",
+                      angle: -90,
+                      position: "insideLeft",
+                      offset: 0,
+                      style: { textAnchor: "middle" },
+                    }}
                   />
-                ))}
-              </Pie>
-              {isEmpty ? null : <Tooltip content={<ChartTooltip />} />}
-              {isEmpty ? null : <Legend />}
-            </PieChart>
-          </ResponsiveContainer>
+                  <Tooltip content={<ChartTooltip />} />
+                  {(highlighted == null || highlighted === "hours") && (
+                    <Bar
+                      dataKey="hours"
+                      name="Working hours"
+                      fill="var(--ex-chart-1)"
+                      radius={[4, 4, 0, 0]}
+                      cursor="pointer"
+                      stroke="none"
+                      onClick={() => handleSelect("hours")}
+                    />
+                  )}
+                  {(highlighted == null || highlighted === "overtimeHours") && (
+                    <Bar
+                      dataKey="overtimeHours"
+                      name="Overtime hours"
+                      fill="var(--ex-chart-3)"
+                      radius={[4, 4, 0, 0]}
+                      cursor="pointer"
+                      stroke="none"
+                      onClick={() => handleSelect("overtimeHours")}
+                    />
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <ChartLegend items={legendItems} selected={highlighted} onSelect={handleSelect} />
+          </>
         )}
       </CardContent>
     </Card>
@@ -452,45 +621,11 @@ export default function EmployeePerformancePage() {
         )}
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-ex-secondary">
-            {month == null ? "Working hours by month" : "Working hours by day"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="h-80">
-          {loading ? (
-            <Skeleton className="h-full w-full rounded-xl" />
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hoursSeries} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--ex-border)" vertical={false} />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  width={36}
-                  label={{ value: "Hours", angle: -90, position: "insideLeft" }}
-                />
-                <Tooltip content={<ChartTooltip />} />
-                <Legend />
-                <Bar
-                  dataKey="hours"
-                  name="Working hours"
-                  fill="var(--ex-chart-1)"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="overtimeHours"
-                  name="Overtime hours"
-                  fill="var(--ex-chart-3)"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+      <HoursChart
+        data={hoursSeries}
+        title={month == null ? "Working hours by month" : "Working hours by day"}
+        loading={loading}
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <MixChart title="Work Mix" data={summary.workModeMix} loading={loading} />
