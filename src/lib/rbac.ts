@@ -110,6 +110,11 @@ export const navStructure: NavItem[] = [
         roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
       },
       {
+        label: "Performance",
+        href: "/employee/performance",
+        roles: [SUPER_ADMIN, HR_MANAGER],
+      },
+      {
         label: "Punch in / out",
         href: "/employee/punch",
         roles: [HR_MANAGER, EMPLOYEE],

@@ -276,31 +276,38 @@ export function parseDurationToMs(value: string): number {
   const trimmed = value.trim();
   if (!trimmed) return 0;
 
-  if (/^\d+(\.\d+)?$/.test(trimmed)) {
-    const n = parseFloat(trimmed);
+  // Shortfall is stored as "-4h 27m". ASCII hyphen, Unicode minus, or en-dash.
+  // Do not treat em-dash "—" (empty OT placeholder) as a sign.
+  const negative = /^[-−–]/.test(trimmed);
+  const unsigned = negative ? trimmed.replace(/^[-−–]\s*/, "") : trimmed;
+  if (!unsigned) return 0;
+
+  if (/^\d+(\.\d+)?$/.test(unsigned)) {
+    const n = parseFloat(unsigned);
     if (n > 0 && n < 1) {
-      return Math.round(n * 24 * 60 * 60 * 1000);
+      const ms = Math.round(n * 24 * 60 * 60 * 1000);
+      return negative ? -ms : ms;
     }
   }
 
   let totalMs = 0;
-  const hourMatch = trimmed.match(/(\d+)\s*h/i);
-  const minMatch = trimmed.match(/(\d+)\s*m/i);
-  const secMatch = trimmed.match(/(\d+)\s*s/i);
+  const hourMatch = unsigned.match(/(\d+)\s*h/i);
+  const minMatch = unsigned.match(/(\d+)\s*m/i);
+  const secMatch = unsigned.match(/(\d+)\s*s/i);
 
   if (hourMatch) totalMs += parseInt(hourMatch[1], 10) * 60 * 60 * 1000;
   if (minMatch) totalMs += parseInt(minMatch[1], 10) * 60 * 1000;
   if (secMatch) totalMs += parseInt(secMatch[1], 10) * 1000;
 
   if (!hourMatch && !minMatch && !secMatch) {
-    const parts = trimmed.split(":").map((p) => parseInt(p, 10));
+    const parts = unsigned.split(":").map((p) => parseInt(p, 10));
     if (parts.length >= 2 && parts.every((n) => Number.isFinite(n))) {
       const [h, m, s = 0] = parts;
       totalMs = ((h * 60 + m) * 60 + s) * 1000;
     }
   }
 
-  return totalMs;
+  return negative ? -totalMs : totalMs;
 }
 
 export function formatDuration(ms: number): string {
@@ -426,10 +433,12 @@ export function idealBreakMs(): number {
  * Actual break duration to subtract from elapsed punch-in → punch-out time.
  * Empty/missing break is 0 — unused break allowance is never assumed.
  * Legacy CSV imports write `IMPORT_DEFAULT_BREAK` onto the row when needed.
+ * Display strings like "45m / 1h" (used / allowance) only count the used side.
  */
 export function resolveAttendanceBreakMs(totalBreakTime: string, workMode?: string): number {
   if (isHalfDayUnpaidWorkMode(workMode)) return 0;
-  return parseDurationToMs(totalBreakTime);
+  const used = totalBreakTime.split("/")[0]?.trim() ?? "";
+  return parseDurationToMs(used);
 }
 
 /**

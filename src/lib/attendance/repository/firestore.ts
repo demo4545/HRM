@@ -89,8 +89,27 @@ function toAttendanceRow(fields: DayFields): AttendanceRow {
     punchedOut,
     workMode: fields.workMode,
   });
+
+  // Prefer persisted WH / OT / status so Performance matches the sheet when break
+  // cells were cleared or differ from what was used when hours were saved.
+  const storedWorkingHours = fields.workingHours.trim();
+  const useStored = punchedOut && storedWorkingHours.length > 0;
+  const workingHours = punchedOut
+    ? useStored
+      ? storedWorkingHours
+      : metrics.workingHours
+    : fields.workingHours;
+  const overtime = punchedOut
+    ? useStored
+      ? fields.overtime.trim() || "—"
+      : metrics.overtime
+    : fields.overtime;
   const status = punchedOut
-    ? resolveAttendanceStatus(metrics.status, fields.isOvertimeApproved, metrics.overtime)
+    ? resolveAttendanceStatus(
+        useStored ? fields.status.trim() || metrics.status : metrics.status,
+        fields.isOvertimeApproved,
+        overtime,
+      )
     : fields.status;
 
   return {
@@ -102,9 +121,9 @@ function toAttendanceRow(fields: DayFields): AttendanceRow {
     breakStart: fields.breakStart,
     breakEnd: fields.breakEnd,
     totalBreakTime,
-    workingHours: punchedOut ? metrics.workingHours : fields.workingHours,
+    workingHours,
     status,
-    overtime: punchedOut ? metrics.overtime : fields.overtime,
+    overtime,
     earlyLeaveReason: punchedOut && status !== WORKING_STATUS.SHORT ? "" : fields.earlyLeaveReason,
     dailyUpdate: fields.dailyUpdate,
     isOvertimeApproved: fields.isOvertimeApproved,
