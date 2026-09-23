@@ -110,6 +110,11 @@ export const navStructure: NavItem[] = [
         roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
       },
       {
+        label: "My System Specs",
+        href: "/employee/system-specs",
+        roles: [HR_MANAGER, EMPLOYEE],
+      },
+      {
         label: "Performance",
         href: "/employee/performance",
         roles: [SUPER_ADMIN, HR_MANAGER],
@@ -240,6 +245,11 @@ export const navStructure: NavItem[] = [
         roles: [SUPER_ADMIN, HR_MANAGER],
         label: "LAN / Wi-Fi Restriction",
         href: "/settings/network",
+      },
+      {
+        roles: [SUPER_ADMIN, HR_MANAGER],
+        label: "System Specifications",
+        href: "/settings/system-specs",
       },
       {
         roles: [SUPER_ADMIN],

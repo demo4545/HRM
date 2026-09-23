@@ -102,13 +102,23 @@ function redirectToNetworkBlocked(req: NextRequest) {
 
 /**
  * Cookie-based network gate (no Google Sheets in middleware).
- * Missing/stale cookie → /network-blocked to revalidate via Node API.
+ * Missing/stale cookie → pages go to /network-blocked to revalidate via Node API.
+ * API routes are not hard-blocked on stale cookies — handlers run assertNetworkAccess.
  */
 function enforceNetworkGate(req: NextRequest, role: UserRole): NextResponse | null {
   if (canManageEmployees(role)) return null;
 
   const decision = readNetworkGateDecision(req.cookies.get(NETWORK_GATE_COOKIE)?.value, req);
   if (decision === "allow") return null;
+
+  // Fetch/XHR cannot follow the page revalidation flow. Let APIs through so
+  // `withActiveSession` → `assertNetworkAccess` can evaluate the real IP and
+  // refresh the gate cookie. Treating "revalidate" as NETWORK_RESTRICTED here
+  // falsely blocked employees on office Wi‑Fi after the 2-minute cookie TTL.
+  if (req.nextUrl.pathname.startsWith("/api/")) {
+    return null;
+  }
+
   return redirectToNetworkBlocked(req);
 }
 
@@ -234,16 +244,6 @@ export async function middleware(req: NextRequest) {
   if (!isNetworkGateAllowedPath(pathname)) {
     const networkRedirect = enforceNetworkGate(req, user.role as UserRole);
     if (networkRedirect) {
-      if (pathname.startsWith("/api/")) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Access is limited to the office Wi‑Fi network.",
-            code: "NETWORK_RESTRICTED",
-          },
-          { status: 403 },
-        );
-      }
       return networkRedirect;
     }
   }
