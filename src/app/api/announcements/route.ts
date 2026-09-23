@@ -73,20 +73,24 @@ export const POST = withActiveSession(async (req, user) => {
       );
     }
 
-    const employees = (await listActiveEmployees()).filter(
-      (employee) => employee.role === ROLES.EMPLOYEE,
+    // Company-wide notice: every Active employee except Super Admin and the publisher.
+    const authorSheetRow = user.sheetRow ?? 0;
+    const recipients = (await listActiveEmployees()).filter(
+      (employee) =>
+        employee.role !== ROLES.SUPER_ADMIN &&
+        (authorSheetRow < 2 || employee.sheetRow !== authorSheetRow),
     );
     const announcement = await createAnnouncement({
       title,
       message,
       category,
-      authorSheetRow: user.sheetRow ?? 0,
+      authorSheetRow,
       authorName: user.name,
-      recipientCount: employees.length,
+      recipientCount: recipients.length,
     });
 
     const notified = await createNotifications(
-      employees.map((employee) => ({
+      recipients.map((employee) => ({
         recipientSheetRow: employee.sheetRow,
         recipientEmployeeId: employee.employeeId,
         type: NOTIFICATION_TYPES.ANNOUNCEMENT,

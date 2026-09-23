@@ -10,31 +10,33 @@ import {
   listSystemSpecs,
   upsertSystemSpecs,
 } from "@/lib/system-specs/repository";
-import type { DeviceSpec, SystemSpecsInput } from "@/lib/system-specs/types";
+import type { DeviceSpec, LoginCredential, SystemSpecsInput } from "@/lib/system-specs/types";
+import { normalizeDeviceList, normalizeLoginList } from "@/lib/system-specs/types";
 
 export const dynamic = "force-dynamic";
 
-function parseDevice(value: unknown): Partial<DeviceSpec> | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const raw = value as Record<string, unknown>;
-  return {
-    name: String(raw.name ?? "").trim(),
-    serialNumber: String(raw.serialNumber ?? "").trim(),
-  };
+function parseDeviceList(value: unknown): DeviceSpec[] | undefined {
+  if (value == null) return undefined;
+  return normalizeDeviceList(value);
+}
+
+function parseLoginList(value: unknown): LoginCredential[] | undefined {
+  if (value == null) return undefined;
+  return normalizeLoginList(value);
 }
 
 function parseBodyFields(body: Record<string, unknown>): Omit<SystemSpecsInput, "employeeSheetRow"> {
   return {
     employeeId: body.employeeId != null ? String(body.employeeId).trim() : undefined,
     employeeName: body.employeeName != null ? String(body.employeeName).trim() : undefined,
-    laptop: parseDevice(body.laptop),
-    desktop: parseDevice(body.desktop),
-    keyboard: parseDevice(body.keyboard),
-    mouse: parseDevice(body.mouse),
-    cpu: parseDevice(body.cpu),
+    laptop: parseDeviceList(body.laptop),
+    desktop: parseDeviceList(body.desktop),
+    screen: parseDeviceList(body.screen),
+    keyboard: parseDeviceList(body.keyboard),
+    mouse: parseDeviceList(body.mouse),
+    cpu: parseDeviceList(body.cpu),
     ramGb: body.ramGb != null ? String(body.ramGb).trim() : undefined,
-    loginUsername: body.loginUsername != null ? String(body.loginUsername).trim() : undefined,
-    loginPassword: body.loginPassword != null ? String(body.loginPassword).trim() : undefined,
+    logins: parseLoginList(body.logins),
   };
 }
 

@@ -1,14 +1,18 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   DEVICE_FIELDS,
+  EMPTY_DEVICE,
+  EMPTY_LOGIN,
   type DeviceFieldKey,
+  type DeviceSpec,
+  type LoginCredential,
   type SystemSpecsFormState,
 } from "@/lib/system-specs/types";
 
@@ -21,16 +25,47 @@ type Props = {
   disabled?: boolean;
 };
 
-function updateDevice(
+function updateDeviceItem(
   value: SystemSpecsFormState,
   key: DeviceFieldKey,
-  field: "name" | "serialNumber",
+  index: number,
+  field: keyof DeviceSpec,
   next: string,
 ): SystemSpecsFormState {
-  return {
-    ...value,
-    [key]: { ...value[key], [field]: next },
-  };
+  const list = value[key].map((item, i) => (i === index ? { ...item, [field]: next } : item));
+  return { ...value, [key]: list };
+}
+
+function addDeviceItem(value: SystemSpecsFormState, key: DeviceFieldKey): SystemSpecsFormState {
+  return { ...value, [key]: [...value[key], { ...EMPTY_DEVICE }] };
+}
+
+function removeDeviceItem(
+  value: SystemSpecsFormState,
+  key: DeviceFieldKey,
+  index: number,
+): SystemSpecsFormState {
+  const list = value[key].filter((_, i) => i !== index);
+  return { ...value, [key]: list.length > 0 ? list : [{ ...EMPTY_DEVICE }] };
+}
+
+function updateLoginItem(
+  value: SystemSpecsFormState,
+  index: number,
+  field: keyof LoginCredential,
+  next: string,
+): SystemSpecsFormState {
+  const list = value.logins.map((item, i) => (i === index ? { ...item, [field]: next } : item));
+  return { ...value, logins: list };
+}
+
+function addLoginItem(value: SystemSpecsFormState): SystemSpecsFormState {
+  return { ...value, logins: [...value.logins, { ...EMPTY_LOGIN }] };
+}
+
+function removeLoginItem(value: SystemSpecsFormState, index: number): SystemSpecsFormState {
+  const list = value.logins.filter((_, i) => i !== index);
+  return { ...value, logins: list.length > 0 ? list : [{ ...EMPTY_LOGIN }] };
 }
 
 export function SystemSpecsForm({
@@ -49,28 +84,76 @@ export function SystemSpecsForm({
         <div className="grid gap-5 sm:grid-cols-2">
           {DEVICE_FIELDS.map((device) => (
             <div key={device.key} className="border-ex-border space-y-3 rounded-xl border p-4">
-              <p className="text-ex-primary text-sm font-semibold">{device.label}</p>
-              <div className="space-y-1.5">
-                <Label htmlFor={`${device.key}-name`}>Name</Label>
-                <Input
-                  id={`${device.key}-name`}
-                  value={value[device.key].name}
-                  placeholder={`${device.label} name`}
-                  onChange={(e) =>
-                    onChange(updateDevice(value, device.key, "name", e.target.value))
-                  }
-                />
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-ex-primary text-sm font-semibold">{device.label}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onChange(addDeviceItem(value, device.key))}
+                >
+                  <Plus className="size-3.5" />
+                  Add
+                </Button>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`${device.key}-serial`}>Serial number</Label>
-                <Input
-                  id={`${device.key}-serial`}
-                  value={value[device.key].serialNumber}
-                  placeholder="Serial number"
-                  onChange={(e) =>
-                    onChange(updateDevice(value, device.key, "serialNumber", e.target.value))
-                  }
-                />
+
+              <div className="space-y-3">
+                {value[device.key].map((item, index) => (
+                  <div
+                    key={`${device.key}-${index}`}
+                    className="border-ex-border space-y-3 rounded-lg border border-dashed p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
+                        {device.label} {index + 1}
+                      </p>
+                      {value[device.key].length > 1 ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-rose-600 hover:text-rose-700"
+                          onClick={() => onChange(removeDeviceItem(value, device.key, index))}
+                        >
+                          <Trash2 className="size-3.5" />
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`${device.key}-${index}-name`}>Name</Label>
+                      <Input
+                        id={`${device.key}-${index}-name`}
+                        value={item.name}
+                        placeholder={`${device.label} name`}
+                        onChange={(e) =>
+                          onChange(
+                            updateDeviceItem(value, device.key, index, "name", e.target.value),
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`${device.key}-${index}-serial`}>Serial number</Label>
+                      <Input
+                        id={`${device.key}-${index}-serial`}
+                        value={item.serialNumber}
+                        placeholder="Serial number"
+                        onChange={(e) =>
+                          onChange(
+                            updateDeviceItem(
+                              value,
+                              device.key,
+                              index,
+                              "serialNumber",
+                              e.target.value,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
@@ -94,29 +177,66 @@ export function SystemSpecsForm({
         </div>
 
         <div className="border-ex-border space-y-4 rounded-xl border p-4">
-          <p className="text-ex-primary text-sm font-semibold">System login details</p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="login-username">Username</Label>
-              <Input
-                id="login-username"
-                autoComplete="off"
-                value={value.loginUsername}
-                placeholder="System username"
-                onChange={(e) => onChange({ ...value, loginUsername: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="login-password">Password</Label>
-              <Input
-                id="login-password"
-                type="text"
-                autoComplete="off"
-                value={value.loginPassword}
-                placeholder="System password"
-                onChange={(e) => onChange({ ...value, loginPassword: e.target.value })}
-              />
-            </div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-ex-primary text-sm font-semibold">System login details</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => onChange(addLoginItem(value))}>
+              <Plus className="size-3.5" />
+              Add
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {value.logins.map((item, index) => (
+              <div
+                key={`login-${index}`}
+                className="border-ex-border space-y-3 rounded-lg border border-dashed p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
+                    Login {index + 1}
+                  </p>
+                  {value.logins.length > 1 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-rose-600 hover:text-rose-700"
+                      onClick={() => onChange(removeLoginItem(value, index))}
+                    >
+                      <Trash2 className="size-3.5" />
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`login-${index}-username`}>Username</Label>
+                    <Input
+                      id={`login-${index}-username`}
+                      autoComplete="off"
+                      value={item.username}
+                      placeholder="System username"
+                      onChange={(e) =>
+                        onChange(updateLoginItem(value, index, "username", e.target.value))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`login-${index}-password`}>Password</Label>
+                    <Input
+                      id={`login-${index}-password`}
+                      type="text"
+                      autoComplete="off"
+                      value={item.password}
+                      placeholder="System password"
+                      onChange={(e) =>
+                        onChange(updateLoginItem(value, index, "password", e.target.value))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </fieldset>

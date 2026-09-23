@@ -1,12 +1,10 @@
-import { ROLES, STATUS } from "@/app/consts/common";
+import { ROLES } from "@/app/consts/common";
 import {
   getEmployeeIdFromRow,
-  getSheetHeaders,
-  headerToFormKey,
   isEmployeeStatusActive,
   sheetRowToForm,
 } from "@/lib/employee";
-import { EMPLOYEE_SHEET_RANGE, readSheet } from "@/lib/google/sheets";
+import { listAllEmployeeRows } from "@/lib/employees/repository";
 
 export type NotificationRecipient = {
   sheetRow: number;
@@ -25,6 +23,10 @@ let activeEmployeesCache: {
 } | null = null;
 let activeEmployeesRequest: Promise<NotificationRecipient[]> | null = null;
 
+/**
+ * Active employees for notifications / announcements.
+ * Uses the same employee source as All Employees (`DAILY_DATA_STORAGE`).
+ */
 export async function listActiveEmployees(): Promise<NotificationRecipient[]> {
   if (
     activeEmployeesCache &&
@@ -35,21 +37,16 @@ export async function listActiveEmployees(): Promise<NotificationRecipient[]> {
   if (activeEmployeesRequest) return activeEmployeesRequest;
 
   activeEmployeesRequest = (async () => {
-    const raw = await readSheet(EMPLOYEE_SHEET_RANGE);
-    const headers = getSheetHeaders(raw);
-    const statusColIndex = headers.findIndex((h) => headerToFormKey(h) === "status");
+    const records = await listAllEmployeeRows();
     const recipients: NotificationRecipient[] = [];
 
-    for (let i = 1; i < raw.length; i++) {
-      const row = raw[i] ?? [];
-      const sheetRow = i + 1;
-      const status = statusColIndex >= 0 ? String(row[statusColIndex] ?? "") : STATUS.ACTIVE;
-      if (!isEmployeeStatusActive(status)) continue;
+    for (const record of records) {
+      const form = sheetRowToForm(record.headers, record.row);
+      if (!isEmployeeStatusActive(form.status)) continue;
 
-      const form = sheetRowToForm(headers, row);
       recipients.push({
-        sheetRow,
-        employeeId: getEmployeeIdFromRow(headers, row, sheetRow),
+        sheetRow: record.sheetRow,
+        employeeId: getEmployeeIdFromRow(record.headers, record.row, record.sheetRow),
         name: form.name.trim() || "Employee",
         role: form.role.trim().toLowerCase(),
         birthdayDate: form.birthdayDate.trim(),
@@ -72,4 +69,9 @@ export async function listHrAndSuperAdminRecipients(): Promise<NotificationRecip
   return employees.filter(
     (employee) => employee.role === ROLES.HR_MANAGER || employee.role === ROLES.SUPER_ADMIN,
   );
+}
+
+/** Call after employee roster changes so announcement recipients stay fresh. */
+export function clearActiveEmployeesCache(): void {
+  activeEmployeesCache = null;
 }

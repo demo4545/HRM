@@ -22,8 +22,12 @@ export const GET = withActiveSession(async (req, user) => {
   }
 
   try {
-    // Remove broken Active rows (e.g. date in name column, blank start, Rs. 0 basic).
-    await cleanupCorruptSalaryHistoryRecords();
+    // Best-effort: never fail the list because cleanup hit Sheets quota/timeouts.
+    try {
+      await cleanupCorruptSalaryHistoryRecords();
+    } catch (cleanupError) {
+      console.warn("[salary-history] cleanup skipped:", cleanupError);
+    }
 
     const employeeSheetRowParam = req.nextUrl.searchParams.get("employeeSheetRow");
     const employeeSheetRow = employeeSheetRowParam ? Number(employeeSheetRowParam) : null;
