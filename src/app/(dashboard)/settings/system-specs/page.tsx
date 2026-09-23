@@ -21,6 +21,8 @@ import { ROLES } from "@/app/consts/common";
 import {
   emptySystemSpecsForm,
   recordToFormState,
+  summarizeDevices,
+  summarizeLogins,
   type SystemSpecsFormState,
   type SystemSpecsRecord,
 } from "@/lib/system-specs/types";
@@ -40,6 +42,7 @@ type TableRow = {
   sheetRow: number;
   laptop: string;
   desktop: string;
+  screen: string;
   keyboard: string;
   mouse: string;
   cpu: string;
@@ -48,14 +51,6 @@ type TableRow = {
   password: string;
   status: "Submitted" | "Missing";
 };
-
-function deviceSummary(name: string, serial: string): string {
-  const n = name.trim();
-  const s = serial.trim();
-  if (!n && !s) return "—";
-  if (n && s) return `${n} (${s})`;
-  return n || s;
-}
 
 export default function SystemSpecsAdminPage() {
   const { user, loading: authLoading } = useAuth();
@@ -152,22 +147,15 @@ export default function SystemSpecsAdminPage() {
           employeeName: emp.name,
           employeeId: emp.employeeId || "—",
           sheetRow: emp.sheetRow,
-          laptop: specs
-            ? deviceSummary(specs.laptop.name, specs.laptop.serialNumber)
-            : "—",
-          desktop: specs
-            ? deviceSummary(specs.desktop.name, specs.desktop.serialNumber)
-            : "—",
-          keyboard: specs
-            ? deviceSummary(specs.keyboard.name, specs.keyboard.serialNumber)
-            : "—",
-          mouse: specs
-            ? deviceSummary(specs.mouse.name, specs.mouse.serialNumber)
-            : "—",
-          cpu: specs ? deviceSummary(specs.cpu.name, specs.cpu.serialNumber) : "—",
+          laptop: specs ? summarizeDevices(specs.laptop) : "—",
+          desktop: specs ? summarizeDevices(specs.desktop) : "—",
+          screen: specs ? summarizeDevices(specs.screen) : "—",
+          keyboard: specs ? summarizeDevices(specs.keyboard) : "—",
+          mouse: specs ? summarizeDevices(specs.mouse) : "—",
+          cpu: specs ? summarizeDevices(specs.cpu) : "—",
           ramGb: specs?.ramGb?.trim() || "—",
-          username: specs?.loginUsername?.trim() || "—",
-          password: specs?.loginPassword?.trim() || "—",
+          username: specs ? summarizeLogins(specs.logins, "username") : "—",
+          password: specs ? summarizeLogins(specs.logins, "password") : "—",
           status: specs ? "Submitted" : "Missing",
         };
       });
@@ -185,14 +173,47 @@ export default function SystemSpecsAdminPage() {
           </div>
         ),
       },
-      { key: "laptop", header: "Laptop" },
-      { key: "desktop", header: "Desktop" },
-      { key: "keyboard", header: "Keyboard" },
-      { key: "mouse", header: "Mouse" },
-      { key: "cpu", header: "CPU" },
+      {
+        key: "laptop",
+        header: "Laptop",
+        render: (row) => <span className="whitespace-pre-wrap">{row.laptop}</span>,
+      },
+      {
+        key: "desktop",
+        header: "Desktop",
+        render: (row) => <span className="whitespace-pre-wrap">{row.desktop}</span>,
+      },
+      {
+        key: "screen",
+        header: "Screen",
+        render: (row) => <span className="whitespace-pre-wrap">{row.screen}</span>,
+      },
+      {
+        key: "keyboard",
+        header: "Keyboard",
+        render: (row) => <span className="whitespace-pre-wrap">{row.keyboard}</span>,
+      },
+      {
+        key: "mouse",
+        header: "Mouse",
+        render: (row) => <span className="whitespace-pre-wrap">{row.mouse}</span>,
+      },
+      {
+        key: "cpu",
+        header: "CPU",
+        render: (row) => <span className="whitespace-pre-wrap">{row.cpu}</span>,
+      },
       { key: "ramGb", header: "RAM (GB)" },
-      { key: "username", header: "Login user" },
-      { key: "password", header: "Password" },
+      {
+        key: "username",
+        header: "Login user",
+        render: (row) => <span className="whitespace-pre-wrap">{row.username}</span>,
+      },
+      {
+        key: "password",
+        header: "Password",
+        render: (row) => <span className="whitespace-pre-wrap">{row.password}</span>,
+      },
       {
         key: "status",
         header: "Status",

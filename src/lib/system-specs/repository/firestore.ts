@@ -1,7 +1,9 @@
 import { getAdminFirestore } from "@/lib/firebase/admin";
 import {
-  EMPTY_DEVICE,
-  type DeviceSpec,
+  compactDeviceList,
+  compactLoginList,
+  normalizeDeviceList,
+  normalizeLoginList,
   type SystemSpecsInput,
   type SystemSpecsRecord,
 } from "@/lib/system-specs/types";
@@ -16,15 +18,6 @@ function specsCollection() {
   return getAdminFirestore().collection(COLLECTION);
 }
 
-function normalizeDevice(value: unknown): DeviceSpec {
-  if (!value || typeof value !== "object") return { ...EMPTY_DEVICE };
-  const raw = value as Record<string, unknown>;
-  return {
-    name: String(raw.name ?? "").trim(),
-    serialNumber: String(raw.serialNumber ?? "").trim(),
-  };
-}
-
 function docToRecord(id: string, data: Record<string, unknown>): SystemSpecsRecord | null {
   const employeeSheetRow = Number(data.employeeSheetRow ?? 0);
   if (!Number.isInteger(employeeSheetRow) || employeeSheetRow < 2) return null;
@@ -34,14 +27,14 @@ function docToRecord(id: string, data: Record<string, unknown>): SystemSpecsReco
     employeeSheetRow,
     employeeId: String(data.employeeId ?? "").trim(),
     employeeName: String(data.employeeName ?? "").trim(),
-    laptop: normalizeDevice(data.laptop),
-    desktop: normalizeDevice(data.desktop),
-    keyboard: normalizeDevice(data.keyboard),
-    mouse: normalizeDevice(data.mouse),
-    cpu: normalizeDevice(data.cpu),
+    laptop: normalizeDeviceList(data.laptop),
+    desktop: normalizeDeviceList(data.desktop),
+    screen: normalizeDeviceList(data.screen),
+    keyboard: normalizeDeviceList(data.keyboard),
+    mouse: normalizeDeviceList(data.mouse),
+    cpu: normalizeDeviceList(data.cpu),
     ramGb: String(data.ramGb ?? "").trim(),
-    loginUsername: String(data.loginUsername ?? "").trim(),
-    loginPassword: String(data.loginPassword ?? "").trim(),
+    logins: normalizeLoginList(data.logins, data.loginUsername, data.loginPassword),
     createdAt: String(data.createdAt ?? "").trim() || nowIso(),
     updatedAt: String(data.updatedAt ?? "").trim() || nowIso(),
     updatedBy: String(data.updatedBy ?? "").trim(),
@@ -50,6 +43,18 @@ function docToRecord(id: string, data: Record<string, unknown>): SystemSpecsReco
 
 function docIdForSheetRow(sheetRow: number): string {
   return `row_${sheetRow}`;
+}
+
+function pickDevices(
+  input: SystemSpecsInput,
+  prev: Record<string, unknown>,
+  key: keyof Pick<
+    SystemSpecsInput,
+    "laptop" | "desktop" | "screen" | "keyboard" | "mouse" | "cpu"
+  >,
+) {
+  if (input[key] !== undefined) return compactDeviceList(input[key]);
+  return compactDeviceList(normalizeDeviceList(prev[key]));
 }
 
 export async function listSystemSpecsFirestore(): Promise<SystemSpecsRecord[]> {
@@ -88,19 +93,24 @@ export async function upsertSystemSpecsFirestore(
     ? ((existing.data() ?? {}) as Record<string, unknown>)
     : ({} as Record<string, unknown>);
 
+  const logins =
+    input.logins !== undefined
+      ? compactLoginList(input.logins)
+      : compactLoginList(normalizeLoginList(prev.logins, prev.loginUsername, prev.loginPassword));
+
   const record: SystemSpecsRecord = {
     id,
     employeeSheetRow: sheetRow,
     employeeId: String(input.employeeId ?? prev.employeeId ?? "").trim(),
     employeeName: String(input.employeeName ?? prev.employeeName ?? "").trim(),
-    laptop: normalizeDevice(input.laptop ?? prev.laptop),
-    desktop: normalizeDevice(input.desktop ?? prev.desktop),
-    keyboard: normalizeDevice(input.keyboard ?? prev.keyboard),
-    mouse: normalizeDevice(input.mouse ?? prev.mouse),
-    cpu: normalizeDevice(input.cpu ?? prev.cpu),
+    laptop: pickDevices(input, prev, "laptop"),
+    desktop: pickDevices(input, prev, "desktop"),
+    screen: pickDevices(input, prev, "screen"),
+    keyboard: pickDevices(input, prev, "keyboard"),
+    mouse: pickDevices(input, prev, "mouse"),
+    cpu: pickDevices(input, prev, "cpu"),
     ramGb: String(input.ramGb ?? prev.ramGb ?? "").trim(),
-    loginUsername: String(input.loginUsername ?? prev.loginUsername ?? "").trim(),
-    loginPassword: String(input.loginPassword ?? prev.loginPassword ?? "").trim(),
+    logins,
     createdAt: String(prev.createdAt ?? "").trim() || timestamp,
     updatedAt: timestamp,
     updatedBy: updatedBy.trim(),

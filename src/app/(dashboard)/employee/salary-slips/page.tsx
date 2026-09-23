@@ -15,10 +15,12 @@ import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { Select } from "@/components/ui/select";
 import { ROLES } from "@/app/consts/common";
 import { useAuth } from "@/contexts/auth-provider";
+import { useNotifications } from "@/contexts/notifications-provider";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { canManageEmployees } from "@/lib/auth/roles";
 import { buildFullMonthYearPeriodOptions } from "@/lib/attendance/period-options";
 import { parseEmployeeListApiResponse, pickSheetRowFields } from "@/lib/employee";
+import { getDaysInMonth } from "@/lib/payroll/working-days";
 import type { Column } from "@/types/table";
 
 type SalarySlipRow = {
@@ -138,8 +140,34 @@ function salaryHistoryDisplayStatus(record: SalaryHistoryRecord): string {
   return "Active";
 }
 
+/** Active history rows with a usable salary amount. */
+function isUsableSalaryHistory(record: SalaryHistoryRecord): boolean {
+  return (
+    String(record.status ?? "").toLowerCase() === "active" &&
+    Boolean(String(record.effectiveFrom ?? "").trim()) &&
+    Number(record.basic) > 0
+  );
+}
+
+function periodBounds(year: number, monthIndex: number): { start: string; end: string } {
+  const month = monthIndex + 1;
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const end = `${year}-${String(month).padStart(2, "0")}-${String(getDaysInMonth(year, month)).padStart(2, "0")}`;
+  return { start, end };
+}
+
+function coversPeriod(record: SalaryHistoryRecord, periodStart: string, periodEnd: string): boolean {
+  const from = String(record.effectiveFrom ?? "").slice(0, 10);
+  const to = String(record.effectiveTo ?? "").slice(0, 10);
+  if (!from) return false;
+  if (from > periodEnd) return false;
+  if (to && to < periodStart) return false;
+  return true;
+}
+
 export default function SalarySlipsPage() {
   const { user } = useAuth();
+  const { pushToast } = useNotifications();
   const canManage = user ? canManageEmployees(user.role) : false;
 
   const [slips, setSlips] = useState<SalarySlipRow[]>([]);
@@ -165,14 +193,36 @@ export default function SalarySlipsPage() {
   const [professionalTax, setProfessionalTax] = useState("200");
   const [lwf, setLwf] = useState("6");
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  /** Employees eligible for Generate & Release (must have effective salary for the selected month). */
+  const generateEligibleEmployees = useMemo(() => {
+    const usable = historyRecords.filter(isUsableSalaryHistory);
+    if (year == null || month == null) {
+      const sheetRows = new Set(usable.map((r) => r.employeeSheetRow));
+      return employees.filter((e) => sheetRows.has(Number(e.sheetRow)));
+    }
+
+    const { start, end } = periodBounds(year, month);
+    const sheetRows = new Set(
+      usable.filter((r) => coversPeriod(r, start, end)).map((r) => r.employeeSheetRow),
+    );
+    return employees.filter((e) => sheetRows.has(Number(e.sheetRow)));
+  }, [employees, historyRecords, year, month]);
+
+  /** Keep selection only while that employee is still eligible for the current filters. */
+  const selectedGenerateEmployee = useMemo(() => {
+    if (!targetEmployee) return "";
+    return generateEligibleEmployees.some((e) => e.sheetRow === targetEmployee)
+      ? targetEmployee
+      : "";
+  }, [generateEligibleEmployees, targetEmployee]);
 
   const loadSlips = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ mode: "list" });
       if (canManage) {
-        if (targetEmployee) params.set("employeeSheetRow", targetEmployee);
+        if (selectedGenerateEmployee) params.set("employeeSheetRow", selectedGenerateEmployee);
         if (year != null) params.set("year", String(year));
         if (month != null) params.set("month", String(month + 1));
       }
@@ -213,12 +263,11 @@ export default function SalarySlipsPage() {
       );
     } catch (error) {
       console.error(error);
-      setSlips([]);
       setError(toUserFacingFetchError(error));
     } finally {
       setLoading(false);
     }
-  }, [month, targetEmployee, year, canManage]);
+  }, [month, selectedGenerateEmployee, year, canManage]);
 
   const loadEmployees = useCallback(async () => {
     if (!canManage) return;
@@ -282,12 +331,18 @@ export default function SalarySlipsPage() {
     }
   }, [canManage]);
 
+  // Roster + salary history are relatively stable — load once (not on every period filter change).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadEmployees();
+    void loadHistory();
+  }, [loadEmployees, loadHistory]);
+
+  // Slip list depends on period / employee filters.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSlips();
-    void loadEmployees();
-    void loadHistory();
-  }, [loadSlips, loadEmployees, loadHistory]);
+  }, [loadSlips]);
 
   const handlePeriodChange = (nextYear: number | null, nextMonth: number | null) => {
     setYear(nextYear);
@@ -356,20 +411,37 @@ export default function SalarySlipsPage() {
 
   const generateSlips = async () => {
     if (year == null || month == null) {
-      setSuccessMessage(null);
       setError("Select year and month before generating slips.");
       return;
     }
 
+    if (generateEligibleEmployees.length === 0) {
+      setError(
+        "No employees have an effective salary covering this period. Add a salary revision first.",
+      );
+      return;
+    }
+
+    if (selectedGenerateEmployee) {
+      const eligible = generateEligibleEmployees.some(
+        (e) => e.sheetRow === selectedGenerateEmployee,
+      );
+      if (!eligible) {
+        setError(
+          "Selected employee has no effective salary for this period. Choose another employee or add a salary revision.",
+        );
+        return;
+      }
+    }
+
     setBusy(true);
     setError(null);
-    setSuccessMessage(null);
     try {
       const payload: Record<string, unknown> = {
         year,
         month: month + 1,
       };
-      if (targetEmployee) payload.employeeSheetRow = Number(targetEmployee);
+      if (selectedGenerateEmployee) payload.employeeSheetRow = Number(selectedGenerateEmployee);
       const res = await fetch("/api/salary-slips?mode=generate", {
         method: "POST",
         credentials: "include",
@@ -379,10 +451,26 @@ export default function SalarySlipsPage() {
       const data = await readResponseJson<{
         success?: boolean;
         message?: string;
+        generated?: unknown[];
         [key: string]: unknown;
       }>(res, "action");
       if (!data.success) {
         throw new Error(toUserFacingActionError(data.message ?? "Failed to generate salary slips"));
+      }
+      const count = Array.isArray(data.generated) ? data.generated.length : 0;
+      if (count === 0) {
+        setError(
+          "No new salary slips were generated. Employees may already have a slip for this month, or lack effective salary for the period.",
+        );
+      } else {
+        pushToast({
+          title: "Salary slips released",
+          body:
+            count === 1
+              ? "Generated and released 1 salary slip."
+              : `Generated and released ${count} salary slips.`,
+          variant: "success",
+        });
       }
       await loadSlips();
     } catch (error) {
@@ -395,24 +483,20 @@ export default function SalarySlipsPage() {
   const addSalaryHistory = async () => {
     const selectedRow = Number(historyEmployeeSheetRow);
     if (!Number.isInteger(selectedRow) || selectedRow < 2) {
-      setSuccessMessage(null);
       setError("Select an employee first.");
       return;
     }
     if (!effectiveFrom.trim()) {
-      setSuccessMessage(null);
       setError("Select an effective date.");
       return;
     }
     const basicAmount = Number(basic || 0);
     if (!(basicAmount > 0)) {
-      setSuccessMessage(null);
       setError("Enter a salary greater than 0.");
       return;
     }
     const lwfAmount = Number(lwf || 0);
     if (!(lwfAmount > 0)) {
-      setSuccessMessage(null);
       setError("Enter LWF greater than 0.");
       return;
     }
@@ -460,7 +544,6 @@ export default function SalarySlipsPage() {
   }) => {
     setBusy(true);
     setError(null);
-    setSuccessMessage(null);
     try {
       const res = await fetch("/api/salary-history", {
         method: "POST",
@@ -485,7 +568,11 @@ export default function SalarySlipsPage() {
       }>(res, "action");
       if (!data.success) throw new Error(data.message ?? "Failed to save salary history");
       setPendingRevision(null);
-      setSuccessMessage("Salary history saved");
+      pushToast({
+        title: "Salary revision saved",
+        body: "Salary history was updated successfully.",
+        variant: "success",
+      });
       setEmployees((prev) =>
         prev.map((employee) =>
           employee.sheetRow === String(payload.selectedRow)
@@ -517,7 +604,6 @@ export default function SalarySlipsPage() {
   const deleteSlip = async (slip: SalarySlipRow) => {
     setDeletingSlip(true);
     setError(null);
-    setSuccessMessage(null);
     try {
       const res = await fetch(`/api/salary-slips?slipId=${encodeURIComponent(slip.slipId)}`, {
         method: "DELETE",
@@ -553,11 +639,6 @@ export default function SalarySlipsPage() {
           {error}
         </p>
       ) : null}
-      {successMessage ? (
-        <p className="border-ex-chip-success-border bg-ex-chip-success-bg text-ex-chip-success-fg rounded-xl border px-4 py-3 text-sm">
-          {successMessage}
-        </p>
-      ) : null}
       {canManage ? (
         <div className="flex flex-wrap items-end gap-4">
           <MonthYearPicker
@@ -570,9 +651,12 @@ export default function SalarySlipsPage() {
           />
           <div className="w-auto min-w-48 flex-1 sm:flex-none">
             <label className="text-ex-muted mb-1 block text-xs font-medium">Employee</label>
-            <Select value={targetEmployee} onChange={(e) => setTargetEmployee(e.target.value)}>
-              <option value="">All Active Employees</option>
-              {employees.map((e) => (
+            <Select
+              value={selectedGenerateEmployee}
+              onChange={(e) => setTargetEmployee(e.target.value)}
+            >
+              <option value="">All with effective salary</option>
+              {generateEligibleEmployees.map((e) => (
                 <option key={e.sheetRow} value={e.sheetRow}>
                   {e.name}
                 </option>
@@ -582,7 +666,12 @@ export default function SalarySlipsPage() {
           <Button
             variant="outline"
             onClick={generateSlips}
-            disabled={busy}
+            disabled={
+              busy ||
+              year == null ||
+              month == null ||
+              (year != null && month != null && generateEligibleEmployees.length === 0)
+            }
             className="ml-auto"
             style={{ maxWidth: "180px", justifySelf: "end" }}
           >
