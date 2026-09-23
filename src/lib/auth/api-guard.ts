@@ -5,7 +5,7 @@ import type { SessionUser } from "@/types/auth";
 
 import { isSessionUserActive } from "./account-status";
 import { getSessionFromCookie } from "./server";
-import { assertNetworkAccess } from "@/lib/network-access/assert";
+import { applyNetworkGateCookie, assertNetworkAccess } from "@/lib/network-access/assert";
 
 /** Optional route context (dynamic segments). */
 export type ApiRouteContext = {
@@ -74,6 +74,7 @@ export function withActiveSession<
     if (!active) return inactiveAccountResponse();
     if (!network.ok) return network.response;
 
-    return handler(request, user, context);
+    const response = await handler(request, user, context);
+    return applyNetworkGateCookie(response, network.gate);
   };
 }
