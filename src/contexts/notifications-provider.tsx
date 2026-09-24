@@ -33,6 +33,8 @@ type NotificationsContextValue = {
   birthdayReminders: NotificationRecord[];
   loading: boolean;
   refresh: () => Promise<void>;
+  markAsRead: (id: string) => Promise<boolean>;
+  markAllAsRead: () => Promise<boolean>;
   pushToast: (toast: Omit<NotificationToastItem, "id"> & { id?: string }) => void;
 };
 
@@ -162,6 +164,61 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     }
   }, [applyFetchedNotifications, user?.sheetRow]);
 
+  const markAsRead = useCallback(
+    async (id: string): Promise<boolean> => {
+      const target = notifications.find((item) => item.id === id);
+      if (!target || target.read) return true;
+
+      // Optimistic UI — update instantly, sync in background.
+      setNotifications((current) =>
+        current.map((item) => (item.id === id ? { ...item, read: true } : item)),
+      );
+      setUnreadCount((count) => Math.max(0, count - 1));
+
+      try {
+        const res = await fetch("/api/notifications", {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        if (!res.ok) throw new Error("Failed to mark notification as read");
+        return true;
+      } catch {
+        setNotifications((current) =>
+          current.map((item) => (item.id === id ? { ...item, read: false } : item)),
+        );
+        setUnreadCount((count) => count + 1);
+        return false;
+      }
+    },
+    [notifications],
+  );
+
+  const markAllAsRead = useCallback(async (): Promise<boolean> => {
+    const previous = notifications;
+    const unread = previous.filter((item) => !item.read).length;
+    if (unread === 0) return true;
+
+    setNotifications((current) => current.map((item) => ({ ...item, read: true })));
+    setUnreadCount(0);
+
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAll: true }),
+      });
+      if (!res.ok) throw new Error("Failed to mark all notifications as read");
+      return true;
+    } catch {
+      setNotifications(previous);
+      setUnreadCount(unread);
+      return false;
+    }
+  }, [notifications]);
+
   useEffect(() => {
     initializedRef.current = false;
     knownIdsRef.current = new Set();
@@ -214,9 +271,21 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       birthdayReminders: isLoggedIn ? birthdayReminders : [],
       loading: isLoggedIn ? loading : false,
       refresh,
+      markAsRead,
+      markAllAsRead,
       pushToast,
     }),
-    [isLoggedIn, unreadCount, notifications, birthdayReminders, loading, refresh, pushToast],
+    [
+      isLoggedIn,
+      unreadCount,
+      notifications,
+      birthdayReminders,
+      loading,
+      refresh,
+      markAsRead,
+      markAllAsRead,
+      pushToast,
+    ],
   );
 
   return (

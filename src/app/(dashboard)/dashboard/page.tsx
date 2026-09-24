@@ -15,6 +15,7 @@ import { useEffect, useState, type ReactNode } from "react";
 //   YAxis,
 // } from "recharts";
 import { AttendanceWidget } from "@/components/attendance/attendance-widget";
+import { DashboardAnnouncements } from "@/components/dashboard/dashboard-announcements";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,14 +72,14 @@ function DashboardStatCard({
 }) {
   if (loading) {
     return (
-      <div className="border-ex-border bg-ex-elevated rounded-xl border p-4 shadow-sm dark:shadow-none">
+      <div className="border-ex-border bg-ex-elevated flex h-full min-h-[9.5rem] flex-col justify-center rounded-xl border p-4 shadow-sm dark:shadow-none">
         <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">{label}</p>
         <div className="bg-ex-surface mt-2 h-8 w-20 animate-pulse rounded-md" aria-hidden />
         {hint ? <p className="text-ex-muted mt-1 text-xs">{hint}</p> : null}
       </div>
     );
   }
-  return <StatCard label={label} value={value} hint={hint} />;
+  return <StatCard label={label} value={value} hint={hint} className="flex h-full min-h-[9.5rem] flex-col" />;
 }
 
 type OnLeaveEmployee = {
@@ -478,7 +479,7 @@ export default function DashboardPage() {
   }, [holidayYear]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Executive Overview"
         description="Live attendance, leave, and holiday signals for your team."
@@ -494,24 +495,29 @@ export default function DashboardPage() {
         // }
       />
 
-      <section className={cn("grid gap-4", canManageLeave ? "sm:grid-cols-2" : "max-w-sm")}>
-        {/* <StatCard label="Present today" value="94%" hint="vs. 30-day baseline" /> */}
-        <DashboardStatCard
-          label={canManageLeave && leaveDate !== formatIsoDate() ? "On leave" : "On leave today"}
-          value={`${onLeave.length}/${totalEmployees}`}
-          loading={onLeaveLoading}
-          hint={displayDate(canManageLeave ? leaveDate : formatIsoDate())}
-        />
-        {canManageLeave ? (
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
+        <div
+          className={cn(
+            "grid shrink-0 gap-4",
+            canManageLeave ? "grid-cols-2 lg:w-[30rem]" : "grid-cols-1 lg:w-56",
+          )}
+        >
           <DashboardStatCard
-            label={leaveDate !== formatIsoDate() ? "No punch-in" : "No punch-in today"}
-            value={String(unapprovedAbsence.length)}
-            loading={unapprovedAbsenceLoading}
-            hint={displayDate(leaveDate)}
+            label={canManageLeave && leaveDate !== formatIsoDate() ? "On leave" : "On leave today"}
+            value={`${onLeave.length}/${totalEmployees}`}
+            loading={onLeaveLoading}
+            hint={displayDate(canManageLeave ? leaveDate : formatIsoDate())}
           />
-        ) : null}
-        {/* <StatCard label="Pending approvals" value="7" hint="Leave + overtime" /> */}
-        {/* <StatCard label="Open complaints" value="3" hint="SLA tracked in module" /> */}
+          {canManageLeave ? (
+            <DashboardStatCard
+              label={leaveDate !== formatIsoDate() ? "No punch-in" : "No punch-in today"}
+              value={String(unapprovedAbsence.length)}
+              loading={unapprovedAbsenceLoading}
+              hint={displayDate(leaveDate)}
+            />
+          ) : null}
+        </div>
+        <DashboardAnnouncements className="min-w-0 flex-1" />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3 lg:items-stretch">

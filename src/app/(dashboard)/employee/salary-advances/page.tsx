@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { ROLES } from "@/app/consts/common";
 import { useAuth } from "@/contexts/auth-provider";
+import { useNotifications } from "@/contexts/notifications-provider";
 import { canManageEmployees } from "@/lib/auth/roles";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { parseEmployeeListApiResponse } from "@/lib/employee";
@@ -136,13 +137,13 @@ function installmentsToFormSegments(installments: AdvanceInstallment[]): Schedul
 
 export default function SalaryAdvancesPage() {
   const { user, loading: authLoading } = useAuth();
+  const { pushToast } = useNotifications();
   const canManage = user ? canManageEmployees(user.role) : false;
 
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [advances, setAdvances] = useState<AdvanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -213,15 +214,18 @@ export default function SalaryAdvancesPage() {
   const refresh = useCallback(async () => {
     if (!canManage) return;
     setLoading(true);
-    setError(null);
     try {
       await Promise.all([loadAdvances(), loadEmployees()]);
     } catch (err) {
-      setError(toUserFacingFetchError(err));
+      pushToast({
+        title: "Couldn’t load salary advances",
+        body: toUserFacingFetchError(err),
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }, [canManage, loadAdvances, loadEmployees]);
+  }, [canManage, loadAdvances, loadEmployees, pushToast]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial / refresh load
@@ -262,7 +266,11 @@ export default function SalaryAdvancesPage() {
       } catch (err) {
         if (!cancelled) {
           setPreview(null);
-          setError(toUserFacingFetchError(err));
+          pushToast({
+            title: "Couldn’t load employee window",
+            body: toUserFacingFetchError(err),
+            variant: "error",
+          });
         }
       }
     })();
@@ -270,7 +278,7 @@ export default function SalaryAdvancesPage() {
     return () => {
       cancelled = true;
     };
-  }, [employeeSheetRow, startYear, startMonth]);
+  }, [employeeSheetRow, startYear, startMonth, pushToast]);
 
   const scheduleTotal = useMemo(() => {
     return segments.reduce((sum, segment) => {
@@ -293,37 +301,43 @@ export default function SalaryAdvancesPage() {
     }));
   }, [advances]);
 
-  const beginEdit = useCallback((advance: AdvanceRow) => {
-    const {
-      locked,
-      open,
-      lockedTotal: lockedSum,
-      openTotal,
-    } = splitLockedOpen(advance.installments);
-    if (openTotal <= 0 && locked.length === advance.installments.length) {
-      setError("Nothing left to edit — all installments are in past months.");
-      return;
-    }
+  const beginEdit = useCallback(
+    (advance: AdvanceRow) => {
+      const {
+        locked,
+        open,
+        lockedTotal: lockedSum,
+        openTotal,
+      } = splitLockedOpen(advance.installments);
+      if (openTotal <= 0 && locked.length === advance.installments.length) {
+        pushToast({
+          title: "Nothing left to edit",
+          body: "All installments are in past months.",
+          variant: "error",
+        });
+        return;
+      }
 
-    setError(null);
-    setEditingId(advance.id);
-    setShowForm(true);
-    setEmployeeSheetRow(String(advance.employeeSheetRow));
-    setTotalAmount(String(advance.totalAmount));
-    setLockedTotal(lockedSum);
-    setReason(advance.reason);
-    setSegments(installmentsToFormSegments(open.length ? open : advance.installments));
+      setEditingId(advance.id);
+      setShowForm(true);
+      setEmployeeSheetRow(String(advance.employeeSheetRow));
+      setTotalAmount(String(advance.totalAmount));
+      setLockedTotal(lockedSum);
+      setReason(advance.reason);
+      setSegments(installmentsToFormSegments(open.length ? open : advance.installments));
 
-    const firstOpen = open[0];
-    if (firstOpen) {
-      setStartYear(firstOpen.year);
-      setStartMonth(firstOpen.month);
-    } else {
-      const next = currentYearMonth();
-      setStartYear(next.year);
-      setStartMonth(next.month);
-    }
-  }, []);
+      const firstOpen = open[0];
+      if (firstOpen) {
+        setStartYear(firstOpen.year);
+        setStartMonth(firstOpen.month);
+      } else {
+        const next = currentYearMonth();
+        setStartYear(next.year);
+        setStartMonth(next.month);
+      }
+    },
+    [pushToast],
+  );
 
   const cancelAdvance = useCallback(
     async (id: string) => {
@@ -333,7 +347,6 @@ export default function SalaryAdvancesPage() {
         return;
       }
       setSaving(true);
-      setError(null);
       try {
         const res = await fetch("/api/salary-advances", {
           method: "PATCH",
@@ -347,20 +360,28 @@ export default function SalaryAdvancesPage() {
           setShowForm(false);
           resetForm();
         }
+        pushToast({
+          title: "Advance cancelled",
+          body: "Future payroll months will no longer deduct this advance.",
+          variant: "success",
+        });
         await loadAdvances();
       } catch (err) {
-        setError(toUserFacingActionError(err));
+        pushToast({
+          title: "Cancel failed",
+          body: toUserFacingActionError(err),
+          variant: "error",
+        });
       } finally {
         setSaving(false);
       }
     },
-    [editingId, loadAdvances, resetForm],
+    [editingId, loadAdvances, pushToast, resetForm],
   );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    setError(null);
     try {
       const payload = {
         reason,
@@ -393,19 +414,28 @@ export default function SalaryAdvancesPage() {
         );
       }
 
+      pushToast({
+        title: isEditing ? "Advance updated" : "Advance created",
+        body: isEditing
+          ? "The repayment schedule was saved."
+          : "The salary advance was created successfully.",
+        variant: "success",
+      });
       setShowForm(false);
       resetForm();
       await loadAdvances();
     } catch (err) {
-      setError(
-        toUserFacingActionError(
+      pushToast({
+        title: isEditing ? "Update failed" : "Create failed",
+        body: toUserFacingActionError(
           err instanceof Error
             ? err
             : isEditing
               ? "Failed to update advance"
               : "Failed to create advance",
         ),
-      );
+        variant: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -521,12 +551,6 @@ export default function SalaryAdvancesPage() {
           </div>
         }
       />
-
-      {error ? (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
-          {error}
-        </div>
-      ) : null}
 
       {showForm ? (
         <Card>

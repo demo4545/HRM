@@ -4,9 +4,9 @@ import { ROLES } from "@/app/consts/common";
 import { withActiveSession } from "@/lib/auth/api-guard";
 import { canManageEmployees } from "@/lib/auth/roles";
 import { sheetRowToForm } from "@/lib/employee";
+import { getEmployeeBySheetRow } from "@/lib/employees/repository";
 import { formatGoogleApiClientMessage } from "@/lib/google/drive-auth";
 import { toApiErrorMessage } from "@/lib/api/user-facing-error";
-import { EMPLOYEE_SHEET_RANGE, readSheet } from "@/lib/google/sheets";
 import {
   cancelSalaryAdvance,
   createSalaryAdvance,
@@ -22,6 +22,15 @@ import {
 
 function isSuperAdminRole(role: string): boolean {
   return role.trim().toLowerCase() === ROLES.SUPER_ADMIN;
+}
+
+/** Resolve employee from the same source as the employee list (`DAILY_DATA_STORAGE`). */
+async function resolveEmployeeForm(sheetRow: number) {
+  const record = await getEmployeeBySheetRow(sheetRow);
+  if (!record) return null;
+  const form = sheetRowToForm(record.headers, record.row);
+  if (!form.name.trim()) return null;
+  return form;
 }
 
 export const GET = withActiveSession(async (req, user) => {
@@ -43,15 +52,13 @@ export const GET = withActiveSession(async (req, user) => {
         );
       }
 
-      const employeeSheet = await readSheet(EMPLOYEE_SHEET_RANGE);
-      if (previewRow > employeeSheet.length) {
+      const form = await resolveEmployeeForm(previewRow);
+      if (!form) {
         return NextResponse.json(
           { success: false, message: "Employee not found" },
           { status: 404 },
         );
       }
-      const headers = employeeSheet[0] as string[];
-      const form = sheetRowToForm(headers, employeeSheet[previewRow - 1] ?? []);
       if (isSuperAdminRole(form.role)) {
         return NextResponse.json(
           { success: false, message: "Salary advances are not available for Super Admin" },
@@ -171,13 +178,8 @@ export const POST = withActiveSession(async (req, user) => {
       };
     });
 
-    const employeeSheet = await readSheet(EMPLOYEE_SHEET_RANGE);
-    if (employeeSheetRow > employeeSheet.length) {
-      return NextResponse.json({ success: false, message: "Employee not found" }, { status: 404 });
-    }
-    const headers = employeeSheet[0] as string[];
-    const form = sheetRowToForm(headers, employeeSheet[employeeSheetRow - 1] ?? []);
-    if (!form.name.trim()) {
+    const form = await resolveEmployeeForm(employeeSheetRow);
+    if (!form) {
       return NextResponse.json({ success: false, message: "Employee not found" }, { status: 404 });
     }
     if (isSuperAdminRole(form.role)) {
@@ -273,12 +275,10 @@ export const PATCH = withActiveSession(async (req, user) => {
       return NextResponse.json({ success: false, message: "Advance not found" }, { status: 404 });
     }
 
-    const employeeSheet = await readSheet(EMPLOYEE_SHEET_RANGE);
-    if (existing.employeeSheetRow > employeeSheet.length) {
+    const form = await resolveEmployeeForm(existing.employeeSheetRow);
+    if (!form) {
       return NextResponse.json({ success: false, message: "Employee not found" }, { status: 404 });
     }
-    const headers = employeeSheet[0] as string[];
-    const form = sheetRowToForm(headers, employeeSheet[existing.employeeSheetRow - 1] ?? []);
     if (isSuperAdminRole(form.role)) {
       return NextResponse.json(
         { success: false, message: "Salary advances are not available for Super Admin" },
