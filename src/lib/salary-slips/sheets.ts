@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 
 import { sheets } from "@/lib/google/auth";
 import { applySheetHeaderFormatByTitle } from "@/lib/google/sheet-format";
-import { EMPLOYEE_SHEET_RANGE, readSheet } from "@/lib/google/sheets";
 import { headerToFormKey } from "@/lib/employee/form";
 import { toPayrollDateOnly } from "@/lib/payroll/employment";
 
@@ -361,8 +360,8 @@ async function deleteActiveSalaryHistoryForEmployee(
 }
 
 /**
- * Keep the Employees sheet salary column in sync with the latest salary revision
- * (HR / Super Admin employee list & profile read from that column).
+ * Keep the employee roster salary column in sync with the latest salary revision
+ * (same source as All Employees via `DAILY_DATA_STORAGE`).
  */
 async function syncEmployeeSheetSalary(params: {
   employeeSheetRow: number;
@@ -379,58 +378,31 @@ async function syncEmployeeSheetSalary(params: {
     throw new Error("Cannot sync employee salary: basic must be greater than 0");
   }
 
-  const sheet = await readSheet(EMPLOYEE_SHEET_RANGE);
-  if (sheetRow > sheet.length) {
+  const { getEmployeeBySheetRow, updateEmployeeRow } = await import("@/lib/employees/repository");
+  const { mergeRowWithFormFields, withSheetRowUpdatedAt } = await import("@/lib/employee");
+
+  const record = await getEmployeeBySheetRow(sheetRow);
+  if (!record) {
     throw new Error("Employee not found while syncing salary");
   }
 
-  // Prefer the first-row headers as returned by Sheets (do not trim mid-row blanks away).
-  const headerRow = (sheet[0] ?? []).map((cell) => String(cell ?? ""));
-  const updates: Array<{ range: string; values: string[][] }> = [];
-
-  for (let index = 0; index < headerRow.length; index += 1) {
-    const header = headerRow[index] ?? "";
-    if (!header.trim()) continue;
-    const formKey = headerToFormKey(header);
-    const colLetter = columnIndexToA1Letter(index + 1);
-    const cell = `Employees!${colLetter}${sheetRow}`;
-
-    if (formKey === "salary") {
-      updates.push({ range: cell, values: [[salaryValue]] });
-    }
-    if (formKey === "lastIncrementDate" && params.effectiveFrom) {
-      updates.push({ range: cell, values: [[params.effectiveFrom]] });
-    }
-    if (formKey === "updatedAt") {
-      updates.push({ range: cell, values: [[nowIso()]] });
-    }
+  const { headers, row } = record;
+  const patch: { salary: string; lastIncrementDate?: string } = { salary: salaryValue };
+  if (params.effectiveFrom) {
+    patch.lastIncrementDate = params.effectiveFrom;
   }
 
-  if (!updates.some((u) => u.values[0]?.[0] === salaryValue)) {
+  const hasSalaryColumn = headers.some((header) => headerToFormKey(header) === "salary");
+  if (!hasSalaryColumn) {
     throw new Error(
       'Employees sheet is missing a Salary column (expected header like "salary" or "Salary (monthly)")',
     );
   }
 
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId,
-    requestBody: {
-      valueInputOption: "USER_ENTERED",
-      data: updates,
-    },
-  });
-}
-
-/** 1-based column number → A1 letter(s), e.g. 1→A, 10→J, 27→AA. */
-function columnIndexToA1Letter(columnNumber: number): string {
-  let letter = "";
-  let n = Math.max(1, columnNumber);
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    letter = String.fromCharCode(65 + rem) + letter;
-    n = Math.floor((n - 1) / 26);
-  }
-  return letter;
+  await updateEmployeeRow(
+    sheetRow,
+    withSheetRowUpdatedAt(headers, mergeRowWithFormFields(headers, row, patch)),
+  );
 }
 
 /** Latest Active salary-history row for an employee (by effectiveFrom desc). */

@@ -41,6 +41,7 @@ function docToRequest(id: string, data: Record<string, unknown>): OvertimeReques
     reviewedBy: String(data.reviewedBy ?? ""),
     reviewedDate: String(data.reviewedDate ?? ""),
     createdAt: String(data.createdAt ?? ""),
+    requestedByRole: String(data.requestedByRole ?? "").trim(),
     sheetRow: 0,
   };
 }
@@ -58,11 +59,20 @@ export async function listOvertimeRequestsFirestore(options: {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+export async function getOvertimeRequestByIdFirestore(
+  id: string,
+): Promise<OvertimeRequest | null> {
+  const snap = await overtimeCollection().doc(id).get();
+  if (!snap.exists) return null;
+  return docToRequest(snap.id, snap.data() as Record<string, unknown>);
+}
+
 export async function createOvertimeRequestFirestore(params: {
   employee: AttendanceEmployeeContext;
   date: string;
   overtime: string;
   comment?: string;
+  requestedByRole: string;
 }): Promise<OvertimeRequest> {
   if (!hasPositiveOvertime(params.overtime)) {
     throw new Error("Overtime request can only be raised for positive overtime");
@@ -91,6 +101,7 @@ export async function createOvertimeRequestFirestore(params: {
     reviewedBy: "",
     reviewedDate: "",
     createdAt,
+    requestedByRole: params.requestedByRole.trim(),
     sheetRow: 0,
   };
 

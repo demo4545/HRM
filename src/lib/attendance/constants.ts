@@ -218,6 +218,7 @@ export const OVERTIME_REQUEST_HEADERS = [
   "Reviewed By",
   "Reviewed Date",
   "Created At",
+  "Requested By Role",
 ] as const;
 
 export const ABSENCE_EXPLANATION_SHEET_TITLE = "AbsenceExplanations";

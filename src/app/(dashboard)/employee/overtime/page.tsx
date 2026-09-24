@@ -15,8 +15,9 @@ import {
   reviewOvertimeRequest,
   type OvertimeRequestDto,
 } from "@/lib/attendance/client";
-import { canReviewOvertime } from "@/lib/auth/roles";
+import { canReviewOvertime, canReviewOvertimeRequest } from "@/lib/auth/roles";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
+import { ROLES } from "@/app/consts/common";
 
 function statusVariant(status: OvertimeRequestDto["status"]) {
   if (status === "Approved") return "success" as const;
@@ -24,9 +25,19 @@ function statusVariant(status: OvertimeRequestDto["status"]) {
   return "warning" as const;
 }
 
+function submittedByLabel(role?: string): string {
+  const value = String(role ?? "")
+    .trim()
+    .toLowerCase();
+  if (value === ROLES.HR_MANAGER) return "HR";
+  if (value === ROLES.SUPER_ADMIN) return "Super Admin";
+  if (value === ROLES.EMPLOYEE) return "Employee";
+  return value ? value : "Employee";
+}
+
 export default function OvertimePage() {
   const { user } = useAuth();
-  const canDecide = user ? canReviewOvertime(user.role) : false;
+  const canSeeActions = user ? canReviewOvertime(user.role) : false;
   const [rows, setRows] = useState<OvertimeRequestDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +47,11 @@ export default function OvertimePage() {
     status: "Approved" | "Rejected";
   } | null>(null);
   const [reviewRemarks, setReviewRemarks] = useState("");
+
+  function canDecideRow(row: OvertimeRequestDto): boolean {
+    if (!user) return false;
+    return canReviewOvertimeRequest(user.role, row.requestedByRole);
+  }
 
   async function load() {
     setLoading(true);
@@ -89,7 +105,7 @@ export default function OvertimePage() {
     <div className="space-y-8">
       <PageHeader
         title="Overtime Approvals"
-        description="Employees submit overtime for approval. HR can review requests, while super admin can approve or reject."
+        description="Employee-submitted OT can be accepted or rejected by HR or Super Admin. OT submitted by HR is reviewed by Super Admin only."
         actions={
           <div className="flex items-center gap-2">
             <Badge variant={pendingCount > 0 ? "warning" : "default"}>{pendingCount} pending</Badge>
@@ -128,6 +144,13 @@ export default function OvertimePage() {
               { key: "date", header: "Date" },
               { key: "overtime", header: "OT" },
               {
+                key: "requestedByRole",
+                header: "Submitted by",
+                render: (r) => (
+                  <span className="text-ex-muted text-sm">{submittedByLabel(r.requestedByRole)}</span>
+                ),
+              },
+              {
                 key: "comment",
                 header: "Employee note",
                 render: (r) =>
@@ -154,8 +177,17 @@ export default function OvertimePage() {
                 key: "actions",
                 header: "Actions",
                 sticky: "right",
-                render: (r) =>
-                  canDecide && r.status === "Pending" ? (
+                render: (r) => {
+                  if (r.status !== "Pending") {
+                    return <span className="text-ex-muted">Reviewed</span>;
+                  }
+                  if (!canSeeActions) {
+                    return <span className="text-ex-muted">View only</span>;
+                  }
+                  if (!canDecideRow(r)) {
+                    return <span className="text-ex-muted">Super Admin only</span>;
+                  }
+                  return (
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -181,9 +213,8 @@ export default function OvertimePage() {
                         {actingId === r.id ? "Saving..." : "Reject"}
                       </Button>
                     </div>
-                  ) : (
-                    <span className="text-ex-muted">{canDecide ? "Reviewed" : "View only"}</span>
-                  ),
+                  );
+                },
               },
             ]}
           />

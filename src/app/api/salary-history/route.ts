@@ -4,8 +4,8 @@ import { ROLES } from "@/app/consts/common";
 import { withActiveSession } from "@/lib/auth/api-guard";
 import { canManageEmployees } from "@/lib/auth/roles";
 import { sheetRowToForm } from "@/lib/employee";
+import { getEmployeeBySheetRow } from "@/lib/employees/repository";
 import { formatGoogleApiClientMessage } from "@/lib/google/drive-auth";
-import { EMPLOYEE_SHEET_RANGE, readSheet } from "@/lib/google/sheets";
 import {
   cleanupCorruptSalaryHistoryRecords,
   createSalaryHistoryRecord,
@@ -66,12 +66,12 @@ export const POST = withActiveSession(async (req, user) => {
       );
     }
 
-    const employeeSheet = await readSheet(EMPLOYEE_SHEET_RANGE);
-    if (employeeSheetRow > employeeSheet.length) {
+    // Same roster source as All Employees (`DAILY_DATA_STORAGE` → Firebase or Sheets).
+    const record = await getEmployeeBySheetRow(employeeSheetRow);
+    if (!record) {
       return NextResponse.json({ success: false, message: "Employee not found" }, { status: 404 });
     }
-    const headers = employeeSheet[0] as string[];
-    const form = sheetRowToForm(headers, employeeSheet[employeeSheetRow - 1] ?? []);
+    const form = sheetRowToForm(record.headers, record.row);
     if (isSuperAdminRole(form.role)) {
       return NextResponse.json(
         { success: false, message: "Salary history is not available for Super Admin" },
