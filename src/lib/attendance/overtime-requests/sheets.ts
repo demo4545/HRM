@@ -18,6 +18,7 @@ import type { OvertimeRequest } from "./types";
 export type { OvertimeRequest };
 
 const masterSpreadsheetId = process.env.GOOGLE_SHEET_ID as string;
+const SHEET_RANGE = `'${OVERTIME_REQUEST_SHEET_TITLE}'!A:M`;
 
 const COL = {
   id: 0,
@@ -32,6 +33,7 @@ const COL = {
   reviewedBy: 9,
   reviewedDate: 10,
   createdAt: 11,
+  requestedByRole: 12,
 } as const;
 
 function rowToOvertimeRequest(row: string[], sheetRow: number): OvertimeRequest {
@@ -48,6 +50,7 @@ function rowToOvertimeRequest(row: string[], sheetRow: number): OvertimeRequest 
     reviewedBy: row[COL.reviewedBy] ?? "",
     reviewedDate: row[COL.reviewedDate] ?? "",
     createdAt: row[COL.createdAt] ?? "",
+    requestedByRole: String(row[COL.requestedByRole] ?? "").trim(),
     sheetRow,
   };
 }
@@ -57,6 +60,24 @@ function hasPositiveOvertime(value: string): boolean {
   if (!overtime || overtime === "—") return false;
   if (overtime.startsWith("-")) return false;
   return /\d/.test(overtime);
+}
+
+function requestToRow(request: OvertimeRequest): string[] {
+  return [
+    request.id,
+    request.employeeId,
+    request.employeeName,
+    request.attendanceSpreadsheetId,
+    request.date,
+    request.overtime,
+    request.comment,
+    request.status,
+    request.remarks,
+    request.reviewedBy,
+    request.reviewedDate,
+    request.createdAt,
+    request.requestedByRole,
+  ];
 }
 
 async function ensureOvertimeRequestSheet(): Promise<void> {
@@ -69,31 +90,24 @@ async function ensureOvertimeRequestSheet(): Promise<void> {
     (s) => s.properties?.title === OVERTIME_REQUEST_SHEET_TITLE,
   );
 
-  if (exists) {
-    await applySheetHeaderFormatByTitle(
-      masterSpreadsheetId,
-      OVERTIME_REQUEST_SHEET_TITLE,
-      OVERTIME_REQUEST_HEADERS.length,
-    );
-    return;
-  }
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: masterSpreadsheetId,
-    requestBody: {
-      requests: [
-        {
-          addSheet: {
-            properties: { title: OVERTIME_REQUEST_SHEET_TITLE },
+  if (!exists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: masterSpreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            addSheet: {
+              properties: { title: OVERTIME_REQUEST_SHEET_TITLE },
+            },
           },
-        },
-      ],
-    },
-  });
+        ],
+      },
+    });
+  }
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: masterSpreadsheetId,
-    range: `'${OVERTIME_REQUEST_SHEET_TITLE}'!A1:L1`,
+    range: `'${OVERTIME_REQUEST_SHEET_TITLE}'!A1:M1`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [OVERTIME_REQUEST_HEADERS as unknown as string[]],
@@ -109,7 +123,7 @@ async function ensureOvertimeRequestSheet(): Promise<void> {
 
 async function readOvertimeRequests(): Promise<OvertimeRequest[]> {
   await ensureOvertimeRequestSheet();
-  const rows = await readSheet(`'${OVERTIME_REQUEST_SHEET_TITLE}'!A:L`);
+  const rows = await readSheet(SHEET_RANGE);
   const results: OvertimeRequest[] = [];
 
   for (let i = 1; i < rows.length; i++) {
@@ -131,11 +145,17 @@ export async function listOvertimeRequestsSheets(options: {
   return filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+export async function getOvertimeRequestByIdSheets(id: string): Promise<OvertimeRequest | null> {
+  const all = await readOvertimeRequests();
+  return all.find((r) => r.id === id) ?? null;
+}
+
 export async function createOvertimeRequestSheets(params: {
   employee: AttendanceEmployeeContext;
   date: string;
   overtime: string;
   comment?: string;
+  requestedByRole: string;
 }): Promise<OvertimeRequest> {
   if (!hasPositiveOvertime(params.overtime)) {
     throw new Error("Overtime request can only be raised for positive overtime");
@@ -154,35 +174,7 @@ export async function createOvertimeRequestSheets(params: {
   const id = randomUUID();
   const createdAt = new Date().toISOString();
   const comment = params.comment?.trim() ?? "";
-  const row = [
-    id,
-    params.employee.employeeId,
-    params.employee.employeeName,
-    params.employee.attendanceSpreadsheetId,
-    params.date,
-    params.overtime,
-    comment,
-    OVERTIME_REQUEST_STATUS.PENDING,
-    "",
-    "",
-    "",
-    createdAt,
-  ];
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: masterSpreadsheetId,
-    range: `'${OVERTIME_REQUEST_SHEET_TITLE}'!A:L`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [row] },
-  });
-
-  await updateOvertimeApproval(
-    params.employee.attendanceSpreadsheetId,
-    params.date,
-    OVERTIME_APPROVAL.PENDING,
-  );
-
-  return {
+  const request: OvertimeRequest = {
     id,
     employeeId: params.employee.employeeId,
     employeeName: params.employee.employeeName,
@@ -195,8 +187,24 @@ export async function createOvertimeRequestSheets(params: {
     reviewedBy: "",
     reviewedDate: "",
     createdAt,
+    requestedByRole: params.requestedByRole.trim(),
     sheetRow: 0,
   };
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: masterSpreadsheetId,
+    range: SHEET_RANGE,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [requestToRow(request)] },
+  });
+
+  await updateOvertimeApproval(
+    params.employee.attendanceSpreadsheetId,
+    params.date,
+    OVERTIME_APPROVAL.PENDING,
+  );
+
+  return request;
 }
 
 export async function reviewOvertimeRequestSheets(params: {
@@ -219,26 +227,19 @@ export async function reviewOvertimeRequestSheets(params: {
 
   const reviewedDate = new Date().toISOString();
   const remarks = params.remarks?.trim() ?? "";
-  const row = [
-    request.id,
-    request.employeeId,
-    request.employeeName,
-    request.attendanceSpreadsheetId,
-    request.date,
-    request.overtime,
-    request.comment,
-    params.status,
+  const updated: OvertimeRequest = {
+    ...request,
+    status: params.status,
     remarks,
-    params.reviewerName,
+    reviewedBy: params.reviewerName,
     reviewedDate,
-    request.createdAt,
-  ];
+  };
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: masterSpreadsheetId,
-    range: `'${OVERTIME_REQUEST_SHEET_TITLE}'!A${request.sheetRow}:L${request.sheetRow}`,
+    range: `'${OVERTIME_REQUEST_SHEET_TITLE}'!A${request.sheetRow}:M${request.sheetRow}`,
     valueInputOption: "USER_ENTERED",
-    requestBody: { values: [row] },
+    requestBody: { values: [requestToRow(updated)] },
   });
 
   await updateOvertimeApproval(
@@ -249,11 +250,5 @@ export async function reviewOvertimeRequestSheets(params: {
       : OVERTIME_APPROVAL.REJECTED,
   );
 
-  return {
-    ...request,
-    status: params.status,
-    remarks,
-    reviewedBy: params.reviewerName,
-    reviewedDate,
-  };
+  return updated;
 }

@@ -1,5 +1,6 @@
 export {
   createOvertimeRequest,
+  getOvertimeRequestById,
   listOvertimeRequests,
   reviewOvertimeRequest,
   type OvertimeRequest,

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { OVERTIME_REQUEST_STATUS, WORKING_STATUS } from "@/lib/attendance/constants";
 import {
   createOvertimeRequest,
+  getOvertimeRequestById,
   listOvertimeRequests,
   reviewOvertimeRequest,
 } from "@/lib/attendance/overtime-requests";
@@ -16,7 +17,11 @@ import {
   toAttendanceStorageRef,
 } from "@/lib/attendance/repository";
 import { withActiveSession } from "@/lib/auth/api-guard";
-import { canManageEmployees, canReviewOvertime } from "@/lib/auth/server";
+import {
+  canManageEmployees,
+  canReviewOvertime,
+  canReviewOvertimeRequest,
+} from "@/lib/auth/server";
 import { toApiErrorMessage } from "@/lib/api/user-facing-error";
 
 function isPositiveOvertime(value: string): boolean {
@@ -111,6 +116,7 @@ export const POST = withActiveSession(async (req, user) => {
       date,
       overtime: target.overtime,
       comment,
+      requestedByRole: user.role,
     });
     return NextResponse.json({ success: true, request });
   } catch (error: unknown) {
@@ -146,6 +152,23 @@ export const PATCH = withActiveSession(async (req, user) => {
       return NextResponse.json(
         { success: false, message: "Status must be Approved or Rejected" },
         { status: 400 },
+      );
+    }
+
+    const existing = await getOvertimeRequestById(id);
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, message: "Overtime request not found" },
+        { status: 404 },
+      );
+    }
+    if (!canReviewOvertimeRequest(user.role, existing.requestedByRole)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Only Super Admin can accept or reject overtime requests submitted by HR",
+        },
+        { status: 403 },
       );
     }
 

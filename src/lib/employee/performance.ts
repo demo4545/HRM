@@ -92,12 +92,11 @@ function leaveLabel(workMode: string): string {
   return workMode || "Leave";
 }
 
-function workModeGroup(workMode: string): string {
+/** Work-location chart: Onsite vs WFH only (leave/holiday belong in other charts). */
+function workLocationGroup(workMode: string): "Onsite" | "WFH" | null {
   if (workMode === WORK_MODE.FULL_DAY_ONSITE) return "Onsite";
   if (workMode === WORK_MODE.WFH || workMode === WORK_MODE.WFH_HALF_DAY) return "WFH";
-  if (LEAVE_MODES.has(workMode)) return "Leave";
-  if (HOLIDAY_MODES.has(workMode)) return "Holiday";
-  return workMode || "Other";
+  return null;
 }
 
 function bump(map: Map<string, number>, key: string, amount = 1): void {
@@ -154,7 +153,14 @@ export function summarizeEmployeePerformance(
     overtimeMs += dayOvertimeMs;
     if (approved) approvedOvertimeMs += dayOvertimeMs;
 
-    bump(workModeMap, workModeGroup(workMode));
+    const location = workLocationGroup(workMode);
+    if (location) {
+      bump(
+        workModeMap,
+        location,
+        workMode === WORK_MODE.WFH_HALF_DAY ? 0.5 : 1,
+      );
+    }
     bump(statusMap, status);
 
     if (LEAVE_MODES.has(workMode)) {

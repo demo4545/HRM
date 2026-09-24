@@ -4,11 +4,13 @@ import { isFirebaseDailyStorage } from "@/lib/storage/backend";
 
 import {
   createOvertimeRequestFirestore,
+  getOvertimeRequestByIdFirestore,
   listOvertimeRequestsFirestore,
   reviewOvertimeRequestFirestore,
 } from "./firestore";
 import {
   createOvertimeRequestSheets,
+  getOvertimeRequestByIdSheets,
   listOvertimeRequestsSheets,
   reviewOvertimeRequestSheets,
 } from "./sheets";
@@ -22,11 +24,19 @@ export async function listOvertimeRequests(options: { employeeId?: string }) {
   return listOvertimeRequestsSheets(options);
 }
 
+export async function getOvertimeRequestById(id: string) {
+  if (isFirebaseDailyStorage()) {
+    return getOvertimeRequestByIdFirestore(id);
+  }
+  return getOvertimeRequestByIdSheets(id);
+}
+
 export async function createOvertimeRequest(params: {
   employee: AttendanceEmployeeContext;
   date: string;
   overtime: string;
   comment?: string;
+  requestedByRole: string;
 }) {
   if (isFirebaseDailyStorage()) {
     return createOvertimeRequestFirestore(params);

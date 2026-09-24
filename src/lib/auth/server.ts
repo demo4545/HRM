@@ -5,7 +5,7 @@ import type { SessionUser } from "@/types/auth";
 
 import { isSessionUserActive } from "./account-status";
 
-export { canManageEmployees, canReviewOvertime } from "./roles";
+export { canManageEmployees, canReviewOvertime, canReviewOvertimeRequest } from "./roles";
 
 /** Decode session cookie without checking account status. */
 export async function getSessionFromCookie(): Promise<SessionUser | null> {

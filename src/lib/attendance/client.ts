@@ -81,6 +81,7 @@ export type OvertimeRequestDto = {
   reviewedBy: string;
   reviewedDate: string;
   createdAt: string;
+  requestedByRole?: string;
 };
 
 function mapTodayRecord(record: Record<string, unknown>, fallbackDate?: string): TodayAttendance {

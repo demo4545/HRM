@@ -13,5 +13,6 @@ export type OvertimeRequest = {
   reviewedBy: string;
   reviewedDate: string;
   createdAt: string;
+  requestedByRole: string;
   sheetRow: number;
 };
