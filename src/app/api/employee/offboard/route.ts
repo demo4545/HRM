@@ -4,14 +4,16 @@ import { STATUS } from "@/app/consts/common";
 import { withActiveSession } from "@/lib/auth/api-guard";
 import { canManageEmployees } from "@/lib/auth/server";
 import {
-  getSheetHeaders,
   mergeRowWithFormFields,
-  sheetRowToRange,
+  todayIsoDate,
   withSheetRowUpdatedAt,
 } from "@/lib/employee";
-import { EMPLOYEE_SHEET_RANGE, readSheet, updateSheetRow } from "@/lib/google/sheets";
+import {
+  getEmployeeBySheetRow,
+  updateEmployeeRow,
+} from "@/lib/employees/repository";
+import { clearActiveEmployeesCache } from "@/lib/notifications/recipients";
 import { toApiErrorMessage } from "@/lib/api/user-facing-error";
-import { todayIsoDate } from "@/lib/employee";
 
 export const POST = withActiveSession(async (req, user) => {
   try {
@@ -55,14 +57,13 @@ export const POST = withActiveSession(async (req, user) => {
       );
     }
 
-    const raw = await readSheet(EMPLOYEE_SHEET_RANGE);
-    if (sheetRow > raw.length) {
+    // Same source as the employee list dropdown (`DAILY_DATA_STORAGE`).
+    const record = await getEmployeeBySheetRow(sheetRow);
+    if (!record) {
       return NextResponse.json({ success: false, message: "Employee not found." }, { status: 404 });
     }
 
-    const headers = getSheetHeaders(raw);
-    const row = raw[sheetRow - 1] ?? [];
-
+    const { headers, row } = record;
     const rowValues = withSheetRowUpdatedAt(
       headers,
       mergeRowWithFormFields(headers, row, {
@@ -71,8 +72,8 @@ export const POST = withActiveSession(async (req, user) => {
         offboardReason: reason,
       }),
     );
-    const updateRange = sheetRowToRange(sheetRow, headers.length);
-    await updateSheetRow(updateRange, [rowValues]);
+    await updateEmployeeRow(sheetRow, rowValues);
+    clearActiveEmployeesCache();
 
     return NextResponse.json({
       success: true,

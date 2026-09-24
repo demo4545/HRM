@@ -628,9 +628,9 @@ export default function EmployeePerformancePage() {
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <MixChart title="Work Mix" data={summary.workModeMix} loading={loading} />
-        <MixChart title="Day Status" data={summary.statusMix} loading={loading} />
-        <MixChart title="Leave Mix" data={summary.leaveMix} loading={loading} />
+        <MixChart title="Work location" data={summary.workModeMix} loading={loading} />
+        <MixChart title="Attendance status" data={summary.statusMix} loading={loading} />
+        <MixChart title="Leave by type" data={summary.leaveMix} loading={loading} />
       </div>
     </div>
   );

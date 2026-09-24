@@ -134,10 +134,12 @@ function birthdayEmployeeName(title: string): string {
 
 export default function NotificationsPage() {
   const { user } = useAuth();
-  const { notifications, birthdayReminders, unreadCount, loading, refresh } = useNotifications();
+  const { notifications, birthdayReminders, unreadCount, loading, markAsRead, markAllAsRead } =
+    useNotifications();
   const canViewBirthdays = user ? canManageEmployees(user.role) : false;
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [markingAll, setMarkingAll] = useState(false);
+  const [markingIds, setMarkingIds] = useState<Set<string>>(() => new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
   const rows = notifications as NotificationRow[];
@@ -151,27 +153,22 @@ export default function NotificationsPage() {
   const birthdayCount = birthdayRows.length;
 
   const markRead = async (id: string) => {
-    const res = await fetch("/api/notifications", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-
-    if (!res.ok) return;
-    await refresh();
+    setMarkingIds((current) => new Set(current).add(id));
+    try {
+      await markAsRead(id);
+    } finally {
+      setMarkingIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
   const markAllRead = async () => {
     setMarkingAll(true);
     try {
-      const res = await fetch("/api/notifications", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ markAll: true }),
-      });
-
-      if (!res.ok) return;
-      await refresh();
+      await markAllAsRead();
     } finally {
       setMarkingAll(false);
     }
@@ -191,7 +188,7 @@ export default function NotificationsPage() {
               onClick={() => void markAllRead()}
             >
               <CheckCheck className="size-4" />
-              Mark all read
+              {markingAll ? "Marking…" : "Mark all read"}
             </Button>
           ) : undefined
         }
@@ -380,11 +377,12 @@ export default function NotificationsPage() {
                         {!row.read ? (
                           <button
                             type="button"
+                            disabled={markingIds.has(row.id)}
                             onClick={() => void markRead(row.id)}
-                            className="text-ex-muted hover:text-ex-primary ml-auto inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium"
+                            className="text-ex-muted hover:text-ex-primary ml-auto inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium disabled:cursor-wait disabled:opacity-60"
                           >
                             <Check className="size-3.5" />
-                            Mark as read
+                            {markingIds.has(row.id) ? "Marking…" : "Mark as read"}
                           </button>
                         ) : null}
                       </div>

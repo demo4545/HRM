@@ -23,14 +23,17 @@ function parseCategory(value: unknown): AnnouncementCategory | null {
   return null;
 }
 
-export const GET = withActiveSession(async (_req, user) => {
-  if (!canManageEmployees(user.role)) {
-    return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
-  }
-
+export const GET = withActiveSession(async (req) => {
   try {
+    const { searchParams } = new URL(req.url);
+    const limitParam = Number(searchParams.get("limit") ?? "");
     const announcements = await listAnnouncements();
-    return NextResponse.json({ success: true, announcements });
+    const limited =
+      Number.isInteger(limitParam) && limitParam > 0
+        ? announcements.slice(0, Math.min(limitParam, 50))
+        : announcements;
+
+    return NextResponse.json({ success: true, announcements: limited });
   } catch (error) {
     console.error("GET Announcements Error:", error);
     return NextResponse.json(

@@ -22,7 +22,6 @@ import {
   formatEmployeeRole,
   isEmployeeInactive,
   offboardEmployee,
-  selectEmployeeListError,
   selectEmployeeListLoading,
   selectEmployeeOffboarding,
   selectOffboardingEmployeeOptions,
@@ -44,7 +43,6 @@ export default function OnboardingPage() {
 
   const loading = useAppSelector(selectEmployeeListLoading);
   const offboarding = useAppSelector(selectEmployeeOffboarding);
-  const listError = useAppSelector(selectEmployeeListError);
   const employees = useAppSelector((state) => selectOffboardingEmployeeOptions(state, user?.role));
 
   const canViewInactive = user?.role === ROLES.HR_MANAGER || user?.role === ROLES.SUPER_ADMIN;
@@ -176,10 +174,7 @@ export default function OnboardingPage() {
                 </optgroup>
               ) : null}
             </Select>
-            {listError ? (
-              <p className="text-sm text-red-600 dark:text-red-400">{listError}</p>
-            ) : null}
-            {!loading && !listError && employees.length === 0 ? (
+            {!loading && employees.length === 0 ? (
               <p className="text-ex-muted text-sm">No employees found.</p>
             ) : null}
           </div>

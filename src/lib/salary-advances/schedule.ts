@@ -243,9 +243,8 @@ export function validateAdvanceSchedule(params: {
 
   if (installments.length > availableMonths.length) {
     throw new Error(
-      `Schedule needs ${installments.length} months but only ${availableMonths.length} ` +
-        `month(s) are available before next increment (${nextIncrementDate}). ` +
-        `Max recoverable in that window depends on your monthly amounts.`,
+      `Schedule uses ${installments.length} months, but only ${availableMonths.length} ` +
+        `are available from the selected start. Reduce months or pick an earlier start.`,
     );
   }
 

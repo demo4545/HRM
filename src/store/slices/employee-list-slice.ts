@@ -2,7 +2,7 @@ import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/tool
 
 import { ROLES, STATUS } from "@/app/consts/common";
 import { readResponseJson } from "@/lib/api/read-response-json";
-import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
+import { toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import {
   isAccountInactiveRedirectError,
   isAccountInactiveRedirectPending,
@@ -180,14 +180,9 @@ const employeeListSlice = createSlice({
           employee.status = STATUS.INACTIVE as EmployeeStatus;
         }
       })
-      .addCase(offboardEmployee.rejected, (state, action) => {
+      .addCase(offboardEmployee.rejected, (state) => {
         state.offboarding = false;
-        if (isAccountInactiveRedirectPending() || isAccountInactiveRedirectError(action.error)) {
-          return;
-        }
-        state.error = toUserFacingActionError(
-          action.error.message ?? "Failed to offboard employee",
-        );
+        // Errors are shown via toast on the offboarding page — do not set helper text.
       });
   },
 });
