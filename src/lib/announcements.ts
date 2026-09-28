@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { localTodayIso } from "@/lib/attendance/manual-entry";
 import { sheets } from "@/lib/google/auth";
 import { applySheetHeaderFormatByTitle } from "@/lib/google/sheet-format";
 
@@ -14,6 +15,8 @@ export type AnnouncementRecord = {
   authorName: string;
   recipientCount: number;
   createdAt: string;
+  /** Inclusive end date (YYYY-MM-DD). Shown on dashboard through this day. */
+  expiresAt: string;
 };
 
 const spreadsheetId = process.env.GOOGLE_SHEET_ID as string;
@@ -28,7 +31,10 @@ const HEADERS = [
   "authorName",
   "recipientCount",
   "createdAt",
+  "expiresAt",
 ] as const;
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 let sheetReady = false;
 let sheetRequest: Promise<void> | null = null;
@@ -80,6 +86,21 @@ async function ensureSheet(): Promise<void> {
   return sheetRequest;
 }
 
+function normalizeExpiresAt(value: string): string {
+  const raw = value.trim().slice(0, 10);
+  return ISO_DATE.test(raw) ? raw : "";
+}
+
+/** Visible on dashboard through the end of `expiresAt` (inclusive). */
+export function isAnnouncementActive(
+  expiresAt: string,
+  today: string = localTodayIso(),
+): boolean {
+  const end = normalizeExpiresAt(expiresAt);
+  if (!end) return false;
+  return end >= today.slice(0, 10);
+}
+
 function rowToAnnouncement(row: string[]): AnnouncementRecord | null {
   const id = String(row[0] ?? "").trim();
   const title = String(row[1] ?? "").trim();
@@ -99,20 +120,28 @@ function rowToAnnouncement(row: string[]): AnnouncementRecord | null {
     authorName: String(row[5] ?? "").trim(),
     recipientCount: Number(row[6]) || 0,
     createdAt: String(row[7] ?? "").trim(),
+    expiresAt: normalizeExpiresAt(String(row[8] ?? "")),
   };
 }
 
-export async function listAnnouncements(): Promise<AnnouncementRecord[]> {
+export async function listAnnouncements(options?: {
+  activeOnly?: boolean;
+}): Promise<AnnouncementRecord[]> {
   await ensureSheet();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_RANGE}!A2:H`,
+    range: `${SHEET_RANGE}!A2:I`,
   });
 
-  return ((response.data.values as string[][] | undefined) ?? [])
+  const records = ((response.data.values as string[][] | undefined) ?? [])
     .map(rowToAnnouncement)
     .filter((record): record is AnnouncementRecord => Boolean(record))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  if (options?.activeOnly) {
+    return records.filter((record) => isAnnouncementActive(record.expiresAt));
+  }
+  return records;
 }
 
 export async function createAnnouncement(input: {
@@ -122,17 +151,29 @@ export async function createAnnouncement(input: {
   authorSheetRow: number;
   authorName: string;
   recipientCount: number;
+  expiresAt: string;
 }): Promise<AnnouncementRecord> {
   await ensureSheet();
+  const expiresAt = normalizeExpiresAt(input.expiresAt);
+  if (!expiresAt) {
+    throw new Error("A valid expiry date (YYYY-MM-DD) is required");
+  }
+
   const record: AnnouncementRecord = {
     id: randomUUID(),
-    ...input,
+    title: input.title,
+    message: input.message,
+    category: input.category,
+    authorSheetRow: input.authorSheetRow,
+    authorName: input.authorName,
+    recipientCount: input.recipientCount,
     createdAt: new Date().toISOString(),
+    expiresAt,
   };
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: `${SHEET_RANGE}!A:H`,
+    range: `${SHEET_RANGE}!A:I`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [
@@ -145,6 +186,7 @@ export async function createAnnouncement(input: {
           record.authorName,
           record.recipientCount,
           record.createdAt,
+          record.expiresAt,
         ],
       ],
     },

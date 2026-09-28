@@ -1,16 +1,21 @@
 import type {
+  CompanyWfhDay,
   NetworkAccessSettings,
   OfficeNetwork,
   RemoteAccessEmployee,
 } from "@/lib/network-access/types";
 import {
+  addCompanyWfhDayFirestore,
   addRemoteAccessEmployeeFirestore,
   clearNetworkAccessCachesFirestore,
   createOfficeNetworkFirestore,
   deleteOfficeNetworkFirestore,
   getNetworkAccessSettingsFirestore,
+  isCompanyWfhDayFirestore,
+  listCompanyWfhDaysFirestore,
   listOfficeNetworksFirestore,
   listRemoteAccessEmployeesFirestore,
+  removeCompanyWfhDayFirestore,
   removeRemoteAccessEmployeeFirestore,
   setNetworkRestrictionEnabledFirestore,
   updateOfficeNetworkFirestore,
@@ -84,6 +89,26 @@ export function isEmployeeRemoteExempt(
     return true;
   }
   return false;
+}
+
+export async function listCompanyWfhDays(): Promise<CompanyWfhDay[]> {
+  return listCompanyWfhDaysFirestore();
+}
+
+export async function addCompanyWfhDay(input: {
+  date: string;
+  note?: string;
+  createdByName?: string;
+}): Promise<CompanyWfhDay> {
+  return addCompanyWfhDayFirestore(input);
+}
+
+export async function removeCompanyWfhDay(id: string): Promise<boolean> {
+  return removeCompanyWfhDayFirestore(id);
+}
+
+export async function isCompanyWfhDay(dateIso?: string): Promise<boolean> {
+  return isCompanyWfhDayFirestore(dateIso);
 }
 
 export function clearNetworkAccessCaches(): void {

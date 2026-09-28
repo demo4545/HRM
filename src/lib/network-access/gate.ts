@@ -7,6 +7,7 @@ import {
 } from "@/lib/network-access/network-gate-cookie";
 import {
   getNetworkAccessSettings,
+  isCompanyWfhDay,
   isEmployeeRemoteExempt,
   listOfficeNetworks,
   listRemoteAccessEmployees,
@@ -51,13 +52,19 @@ export async function evaluateNetworkAccess(
   }
 
   try {
-    const [settings, remoteEmployees, networks] = await Promise.all([
+    const [settings, remoteEmployees, networks, companyWfhToday] = await Promise.all([
       getNetworkAccessSettings(),
       listRemoteAccessEmployees(),
       listOfficeNetworks(),
+      isCompanyWfhDay(),
     ]);
     if (!settings.restrictionEnabled) {
       return { allowed: true, reason: "restriction_disabled", clientIp };
+    }
+
+    // Company-wide WFH day: every employee can punch from any network.
+    if (companyWfhToday) {
+      return { allowed: true, reason: "company_wfh_day", clientIp };
     }
 
     if (isEmployeeRemoteExempt(remoteEmployees, user.sheetRow, user.id)) {

@@ -27,7 +27,9 @@ export const GET = withActiveSession(async (req) => {
   try {
     const { searchParams } = new URL(req.url);
     const limitParam = Number(searchParams.get("limit") ?? "");
-    const announcements = await listAnnouncements();
+    const activeOnly =
+      searchParams.get("activeOnly") === "1" || searchParams.get("activeOnly") === "true";
+    const announcements = await listAnnouncements({ activeOnly });
     const limited =
       Number.isInteger(limitParam) && limitParam > 0
         ? announcements.slice(0, Math.min(limitParam, 50))
@@ -56,6 +58,9 @@ export const POST = withActiveSession(async (req, user) => {
     const title = String(body.title ?? "").trim();
     const message = String(body.message ?? "").trim();
     const category = parseCategory(body.category);
+    const expiresAt = String(body.expiresAt ?? "")
+      .trim()
+      .slice(0, 10);
 
     if (!title || title.length > 120) {
       return NextResponse.json(
@@ -75,6 +80,12 @@ export const POST = withActiveSession(async (req, user) => {
         { status: 400 },
       );
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiresAt)) {
+      return NextResponse.json(
+        { success: false, message: "Expiry / end date is required (YYYY-MM-DD)" },
+        { status: 400 },
+      );
+    }
 
     // Company-wide notice: every Active employee except Super Admin and the publisher.
     const authorSheetRow = user.sheetRow ?? 0;
@@ -90,6 +101,7 @@ export const POST = withActiveSession(async (req, user) => {
       authorSheetRow,
       authorName: user.name,
       recipientCount: recipients.length,
+      expiresAt,
     });
 
     const notified = await createNotifications(

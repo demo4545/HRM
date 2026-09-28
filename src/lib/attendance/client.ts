@@ -76,7 +76,7 @@ export type OvertimeRequestDto = {
   date: string;
   overtime: string;
   comment: string;
-  status: "Pending" | "Approved" | "Rejected";
+  status: "Pending" | "Approved" | "Rejected" | "Cancelled";
   remarks: string;
   reviewedBy: string;
   reviewedDate: string;
@@ -353,7 +353,7 @@ export async function saveHrAttendance(body: {
 
 export async function reviewOvertimeRequest(
   id: string,
-  status: "Approved" | "Rejected",
+  status: "Approved" | "Rejected" | "Cancelled",
   remarks?: string,
 ): Promise<void> {
   const res = await fetch("/api/attendance/overtime-requests", {

@@ -21,7 +21,7 @@ import { ROLES } from "@/app/consts/common";
 
 function statusVariant(status: OvertimeRequestDto["status"]) {
   if (status === "Approved") return "success" as const;
-  if (status === "Rejected") return "danger" as const;
+  if (status === "Rejected" || status === "Cancelled") return "danger" as const;
   return "warning" as const;
 }
 
@@ -44,7 +44,7 @@ export default function OvertimePage() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [pendingReview, setPendingReview] = useState<{
     row: OvertimeRequestDto;
-    status: "Approved" | "Rejected";
+    status: "Approved" | "Rejected" | "Cancelled";
   } | null>(null);
   const [reviewRemarks, setReviewRemarks] = useState("");
 
@@ -84,7 +84,11 @@ export default function OvertimePage() {
     };
   }, []);
 
-  async function decide(row: OvertimeRequestDto, status: "Approved" | "Rejected", remarks: string) {
+  async function decide(
+    row: OvertimeRequestDto,
+    status: "Approved" | "Rejected" | "Cancelled",
+    remarks: string,
+  ) {
     setActingId(row.id);
     setError(null);
     try {
@@ -105,7 +109,7 @@ export default function OvertimePage() {
     <div className="space-y-8">
       <PageHeader
         title="Overtime Approvals"
-        description="Employee-submitted OT can be accepted or rejected by HR or Super Admin. OT submitted by HR is reviewed by Super Admin only."
+        description="Employee-submitted OT can be accepted or rejected by HR or Super Admin. OT submitted by HR is reviewed by Super Admin only. Approved OT can later be cancelled so it is not paid."
         actions={
           <div className="flex items-center gap-2">
             <Badge variant={pendingCount > 0 ? "warning" : "default"}>{pendingCount} pending</Badge>
@@ -178,14 +182,37 @@ export default function OvertimePage() {
                 header: "Actions",
                 sticky: "right",
                 render: (r) => {
-                  if (r.status !== "Pending") {
-                    return <span className="text-ex-muted">Reviewed</span>;
-                  }
                   if (!canSeeActions) {
                     return <span className="text-ex-muted">View only</span>;
                   }
                   if (!canDecideRow(r)) {
-                    return <span className="text-ex-muted">Super Admin only</span>;
+                    return (
+                      <span className="text-ex-muted">
+                        {r.status === "Pending" || r.status === "Approved"
+                          ? "Super Admin only"
+                          : "Reviewed"}
+                      </span>
+                    );
+                  }
+                  if (r.status === "Approved") {
+                    return (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600"
+                        disabled={actingId != null}
+                        onClick={() => {
+                          setError(null);
+                          setReviewRemarks("");
+                          setPendingReview({ row: r, status: "Cancelled" });
+                        }}
+                      >
+                        {actingId === r.id ? "Saving..." : "Cancel approval"}
+                      </Button>
+                    );
+                  }
+                  if (r.status !== "Pending") {
+                    return <span className="text-ex-muted">Reviewed</span>;
                   }
                   return (
                     <div className="flex gap-2">
@@ -224,39 +251,66 @@ export default function OvertimePage() {
       <ConfirmationDialog
         open={Boolean(pendingReview)}
         title={
-          pendingReview?.status === "Rejected" ? "Reject overtime request?" : "Approve overtime?"
+          pendingReview?.status === "Cancelled"
+            ? "Cancel overtime approval?"
+            : pendingReview?.status === "Rejected"
+              ? "Reject overtime request?"
+              : "Approve overtime?"
         }
         description={
           pendingReview ? (
-            <>
-              {pendingReview.status === "Rejected" ? "Reject" : "Approve"} overtime for{" "}
-              <span className="text-ex-primary font-medium">{pendingReview.row.employeeName}</span>{" "}
-              on {pendingReview.row.date} ({pendingReview.row.overtime}).
-            </>
+            pendingReview.status === "Cancelled" ? (
+              <>
+                Cancel approval for{" "}
+                <span className="text-ex-primary font-medium">{pendingReview.row.employeeName}</span>{" "}
+                on {pendingReview.row.date} ({pendingReview.row.overtime}). This OT will no longer
+                be paid in payroll.
+              </>
+            ) : (
+              <>
+                {pendingReview.status === "Rejected" ? "Reject" : "Approve"} overtime for{" "}
+                <span className="text-ex-primary font-medium">{pendingReview.row.employeeName}</span>{" "}
+                on {pendingReview.row.date} ({pendingReview.row.overtime}).
+              </>
+            )
           ) : (
             ""
           )
         }
-        confirmText={pendingReview?.status === "Rejected" ? "Reject" : "Approve"}
-        confirmVariant={pendingReview?.status === "Rejected" ? "danger" : "primary"}
+        confirmText={
+          pendingReview?.status === "Cancelled"
+            ? "Cancel approval"
+            : pendingReview?.status === "Rejected"
+              ? "Reject"
+              : "Approve"
+        }
+        confirmVariant={
+          pendingReview?.status === "Approved" ? "primary" : "danger"
+        }
         busy={Boolean(actingId)}
         busyText="Saving…"
         iconContainerClassName={
-          pendingReview?.status === "Rejected" ? "bg-rose-600" : "bg-amber-500"
+          pendingReview?.status === "Approved" ? "bg-amber-500" : "bg-rose-600"
         }
         inputLabel={
-          pendingReview?.status === "Rejected"
-            ? "Rejection remarks (required)"
-            : "Approval remarks (optional)"
+          pendingReview?.status === "Cancelled"
+            ? "Cancellation remarks (required)"
+            : pendingReview?.status === "Rejected"
+              ? "Rejection remarks (required)"
+              : "Approval remarks (optional)"
         }
         inputValue={reviewRemarks}
         onInputChange={setReviewRemarks}
         inputPlaceholder={
-          pendingReview?.status === "Rejected"
-            ? "Enter the reason for rejection"
-            : "Add a note (optional)"
+          pendingReview?.status === "Cancelled"
+            ? "Why is this approval being cancelled?"
+            : pendingReview?.status === "Rejected"
+              ? "Enter the reason for rejection"
+              : "Add a note (optional)"
         }
-        inputRequired={pendingReview?.status === "Rejected"}
+        inputRequired={
+          pendingReview?.status === "Rejected" || pendingReview?.status === "Cancelled"
+        }
         onCancel={() => {
           if (actingId) return;
           setPendingReview(null);

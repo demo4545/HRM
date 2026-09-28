@@ -209,7 +209,10 @@ export async function createOvertimeRequestSheets(params: {
 
 export async function reviewOvertimeRequestSheets(params: {
   id: string;
-  status: typeof OVERTIME_REQUEST_STATUS.APPROVED | typeof OVERTIME_REQUEST_STATUS.REJECTED;
+  status:
+    | typeof OVERTIME_REQUEST_STATUS.APPROVED
+    | typeof OVERTIME_REQUEST_STATUS.REJECTED
+    | typeof OVERTIME_REQUEST_STATUS.CANCELLED;
   remarks?: string;
   reviewerName: string;
 }): Promise<OvertimeRequest> {
@@ -218,9 +221,18 @@ export async function reviewOvertimeRequestSheets(params: {
   if (!request) {
     throw new Error("Overtime request not found");
   }
-  if (request.status !== OVERTIME_REQUEST_STATUS.PENDING) {
+
+  if (params.status === OVERTIME_REQUEST_STATUS.CANCELLED) {
+    if (request.status !== OVERTIME_REQUEST_STATUS.APPROVED) {
+      throw new Error("Only approved overtime can be cancelled");
+    }
+    if (!(params.remarks ?? "").trim()) {
+      throw new Error("Remarks are required when cancelling approved overtime");
+    }
+  } else if (request.status !== OVERTIME_REQUEST_STATUS.PENDING) {
     throw new Error("Overtime request already reviewed");
   }
+
   if (params.status === OVERTIME_REQUEST_STATUS.REJECTED && !(params.remarks ?? "").trim()) {
     throw new Error("Remarks are required when rejecting overtime");
   }
@@ -242,13 +254,14 @@ export async function reviewOvertimeRequestSheets(params: {
     requestBody: { values: [requestToRow(updated)] },
   });
 
-  await updateOvertimeApproval(
-    request.attendanceSpreadsheetId,
-    request.date,
+  const attendanceApproval =
     params.status === OVERTIME_REQUEST_STATUS.APPROVED
       ? OVERTIME_APPROVAL.ACCEPTED
-      : OVERTIME_APPROVAL.REJECTED,
-  );
+      : params.status === OVERTIME_REQUEST_STATUS.REJECTED
+        ? OVERTIME_APPROVAL.REJECTED
+        : OVERTIME_APPROVAL.NOT_CONSIDERED;
+
+  await updateOvertimeApproval(request.attendanceSpreadsheetId, request.date, attendanceApproval);
 
   return updated;
 }

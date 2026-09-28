@@ -46,7 +46,10 @@ export async function createOvertimeRequest(params: {
 
 export async function reviewOvertimeRequest(params: {
   id: string;
-  status: typeof OVERTIME_REQUEST_STATUS.APPROVED | typeof OVERTIME_REQUEST_STATUS.REJECTED;
+  status:
+    | typeof OVERTIME_REQUEST_STATUS.APPROVED
+    | typeof OVERTIME_REQUEST_STATUS.REJECTED
+    | typeof OVERTIME_REQUEST_STATUS.CANCELLED;
   remarks?: string;
   reviewerName: string;
 }) {

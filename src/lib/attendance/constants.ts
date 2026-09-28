@@ -198,6 +198,7 @@ export const OVERTIME_REQUEST_STATUS = {
   PENDING: "Pending",
   APPROVED: "Approved",
   REJECTED: "Rejected",
+  CANCELLED: "Cancelled",
 } as const;
 
 export type OvertimeRequestStatus =

@@ -66,6 +66,19 @@ const CHART_COLORS = [
   "var(--ex-chart-5)",
 ];
 
+/** Stable colors for Attendance status (Overtime ↔ In Progress vs index order). */
+const ATTENDANCE_STATUS_COLORS: Record<string, string> = {
+  Completed: "var(--ex-chart-1)",
+  Overtime: "var(--ex-chart-3)",
+  "Overtime Approved": "var(--ex-chart-3)",
+  "Overtime Rejected": "var(--ex-chart-3)",
+  "Overtime Requested": "var(--ex-chart-3)",
+  "In Progress": "var(--ex-chart-2)",
+  "On Leave": "var(--ex-chart-4)",
+  Absent: "var(--ex-chart-5)",
+  Short: "var(--ex-chart-5)",
+};
+
 const EMPTY_SUMMARY: EmployeePerformanceSummary = {
   presentDays: 0,
   leaveDays: 0,
@@ -189,16 +202,23 @@ function MixChart({
   title,
   data,
   loading = false,
+  colorByName,
 }: {
   title: string;
   data: NamedCount[];
   loading?: boolean;
+  colorByName?: Record<string, string>;
 }) {
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const isEmpty = data.length === 0;
   const chartData = isEmpty ? EMPTY_MIX : data;
   const visibleData =
     isEmpty || !highlighted ? chartData : chartData.filter((entry) => entry.name === highlighted);
+
+  const colorFor = (name: string, index: number) => {
+    if (isEmpty) return "var(--ex-border)";
+    return colorByName?.[name] ?? CHART_COLORS[index % CHART_COLORS.length];
+  };
 
   const handleSelect = (name: string) => {
     if (isEmpty || !name.trim()) return;
@@ -208,7 +228,7 @@ function MixChart({
   const legendItems: ChartLegendItem[] = chartData.map((entry, index) => ({
     key: entry.name,
     label: entry.name,
-    color: isEmpty ? "var(--ex-border)" : CHART_COLORS[index % CHART_COLORS.length],
+    color: colorFor(entry.name, index),
   }));
 
   return (
@@ -247,11 +267,7 @@ function MixChart({
                       return (
                         <Cell
                           key={entry.name}
-                          fill={
-                            isEmpty
-                              ? "var(--ex-border)"
-                              : CHART_COLORS[colorIndex % CHART_COLORS.length]
-                          }
+                          fill={colorFor(entry.name, colorIndex)}
                           stroke="none"
                           strokeWidth={0}
                           style={{ outline: "none" }}
@@ -628,9 +644,14 @@ export default function EmployeePerformancePage() {
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <MixChart title="Work location" data={summary.workModeMix} loading={loading} />
-        <MixChart title="Attendance status" data={summary.statusMix} loading={loading} />
-        <MixChart title="Leave by type" data={summary.leaveMix} loading={loading} />
+        <MixChart title="Work mode" data={summary.workModeMix} loading={loading} />
+        <MixChart
+          title="Attendance status"
+          data={summary.statusMix}
+          loading={loading}
+          colorByName={ATTENDANCE_STATUS_COLORS}
+        />
+        <MixChart title="Leave type" data={summary.leaveMix} loading={loading} />
       </div>
     </div>
   );

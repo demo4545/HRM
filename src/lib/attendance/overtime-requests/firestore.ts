@@ -120,7 +120,10 @@ export async function createOvertimeRequestFirestore(params: {
 
 export async function reviewOvertimeRequestFirestore(params: {
   id: string;
-  status: typeof OVERTIME_REQUEST_STATUS.APPROVED | typeof OVERTIME_REQUEST_STATUS.REJECTED;
+  status:
+    | typeof OVERTIME_REQUEST_STATUS.APPROVED
+    | typeof OVERTIME_REQUEST_STATUS.REJECTED
+    | typeof OVERTIME_REQUEST_STATUS.CANCELLED;
   remarks?: string;
   reviewerName: string;
 }): Promise<OvertimeRequest> {
@@ -134,9 +137,18 @@ export async function reviewOvertimeRequestFirestore(params: {
   if (!request) {
     throw new Error("Overtime request not found");
   }
-  if (request.status !== OVERTIME_REQUEST_STATUS.PENDING) {
+
+  if (params.status === OVERTIME_REQUEST_STATUS.CANCELLED) {
+    if (request.status !== OVERTIME_REQUEST_STATUS.APPROVED) {
+      throw new Error("Only approved overtime can be cancelled");
+    }
+    if (!(params.remarks ?? "").trim()) {
+      throw new Error("Remarks are required when cancelling approved overtime");
+    }
+  } else if (request.status !== OVERTIME_REQUEST_STATUS.PENDING) {
     throw new Error("Overtime request already reviewed");
   }
+
   if (params.status === OVERTIME_REQUEST_STATUS.REJECTED && !(params.remarks ?? "").trim()) {
     throw new Error("Remarks are required when rejecting overtime");
   }
@@ -152,15 +164,21 @@ export async function reviewOvertimeRequestFirestore(params: {
   };
 
   await ref.set(updated);
+
+  const attendanceApproval =
+    params.status === OVERTIME_REQUEST_STATUS.APPROVED
+      ? OVERTIME_APPROVAL.ACCEPTED
+      : params.status === OVERTIME_REQUEST_STATUS.REJECTED
+        ? OVERTIME_APPROVAL.REJECTED
+        : OVERTIME_APPROVAL.NOT_CONSIDERED;
+
   await getAttendanceRepository().updateOvertimeApproval(
     {
       employeeId: request.employeeId,
       spreadsheetId: request.attendanceSpreadsheetId,
     },
     request.date,
-    params.status === OVERTIME_REQUEST_STATUS.APPROVED
-      ? OVERTIME_APPROVAL.ACCEPTED
-      : OVERTIME_APPROVAL.REJECTED,
+    attendanceApproval,
   );
 
   return updated;
