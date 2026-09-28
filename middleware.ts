@@ -199,10 +199,8 @@ export async function middleware(req: NextRequest) {
 
   if (pathname === "/login") {
     if (user) {
-      const active = await fetchAccountActive(req);
-      if (!active) {
-        return NextResponse.redirect(new URL("/account-inactive", req.url));
-      }
+      // Trust the session cookie for redirect speed. /api/auth/me (and API guards)
+      // still verify active status and send inactive accounts to /account-inactive.
       const networkRedirect = enforceNetworkGate(req, user.role as UserRole);
       if (networkRedirect) return networkRedirect;
       if (gateRequired) {
@@ -224,22 +222,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const active = await fetchAccountActive(req);
-  if (!active) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "You cannot access this route. Your account is deactivated.",
-          code: "ACCOUNT_INACTIVE",
-        },
-        { status: 403 },
-      );
-    }
-    const url = req.nextUrl.clone();
-    url.pathname = "/account-inactive";
-    return NextResponse.redirect(url);
-  }
+  // Do not await a live Sheets/Firebase status check here — that edge→Node hop
+  // was the main post-login delay before the dashboard HTML could start.
+  // Account activity is enforced by /api/auth/me and withActiveSession.
 
   if (!isNetworkGateAllowedPath(pathname)) {
     const networkRedirect = enforceNetworkGate(req, user.role as UserRole);

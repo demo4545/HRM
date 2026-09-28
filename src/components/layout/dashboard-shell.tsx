@@ -24,9 +24,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const gateRole = user ? roleRequiresAbsenceExplanationGate(user.role) : false;
   const onPunchPage = pathname === PUNCH_GATE_ROUTE || pathname.startsWith(`${PUNCH_GATE_ROUTE}/`);
   const gateApplies = gateRole && !onPunchPage;
-  const [gateActive, setGateActive] = useState<boolean | null>(() => {
+  // Prefer the login-set hint. Unknown (null) must not block the shell — middleware
+  // already enforces punch-gate cookies; we only redirect when we know gate is on.
+  const [gateActive, setGateActive] = useState<boolean>(() => {
     if (!gateApplies) return false;
-    return readAbsenceGateSessionHint();
+    return readAbsenceGateSessionHint() === true;
   });
 
   useEffect(() => {
@@ -86,7 +88,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (gateApplies && gateActive !== false) {
+  if (gateApplies && gateActive) {
     return (
       <div className="bg-ex-bg flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3">
