@@ -16,7 +16,12 @@ import { canManageEmployees } from "@/lib/auth/roles";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { parseEmployeeListApiResponse } from "@/lib/employee";
 import { fetchPublicIpv4FromBrowser } from "@/lib/network-access/ip";
-import type { OfficeNetwork, RemoteAccessEmployee } from "@/lib/network-access/types";
+import { localTodayIso } from "@/lib/attendance/manual-entry";
+import type {
+  CompanyWfhDay,
+  OfficeNetwork,
+  RemoteAccessEmployee,
+} from "@/lib/network-access/types";
 
 type EmployeeOption = {
   sheetRow: number;
@@ -25,7 +30,22 @@ type EmployeeOption = {
 };
 
 type PendingDelete =
-  { kind: "network"; network: OfficeNetwork } | { kind: "remote"; employee: RemoteAccessEmployee };
+  | { kind: "network"; network: OfficeNetwork }
+  | { kind: "remote"; employee: RemoteAccessEmployee }
+  | { kind: "wfh"; day: CompanyWfhDay };
+
+function formatWfhDate(value: string): string {
+  const raw = value.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return value;
+  const date = new Date(`${raw}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return raw;
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
 
 export default function NetworkAccessSettingsPage() {
   const { user } = useAuth();
@@ -39,6 +59,7 @@ export default function NetworkAccessSettingsPage() {
   const [restrictionEnabled, setRestrictionEnabled] = useState(false);
   const [networks, setNetworks] = useState<OfficeNetwork[]>([]);
   const [remoteEmployees, setRemoteEmployees] = useState<RemoteAccessEmployee[]>([]);
+  const [companyWfhDays, setCompanyWfhDays] = useState<CompanyWfhDay[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [clientIp, setClientIp] = useState("");
   const [serverClientIp, setServerClientIp] = useState("");
@@ -48,6 +69,8 @@ export default function NetworkAccessSettingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [remoteSheetRow, setRemoteSheetRow] = useState("");
+  const [wfhDate, setWfhDate] = useState(localTodayIso());
+  const [wfhNote, setWfhNote] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
 
   const remoteSheetRows = useMemo(
@@ -65,9 +88,10 @@ export default function NetworkAccessSettingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [networksRes, settingsRes, employeesRes, publicIp] = await Promise.all([
+      const [networksRes, settingsRes, wfhRes, employeesRes, publicIp] = await Promise.all([
         fetch("/api/network-access/office-networks", { credentials: "include", cache: "no-store" }),
         fetch("/api/network-access/settings", { credentials: "include", cache: "no-store" }),
+        fetch("/api/network-access/company-wfh-days", { credentials: "include", cache: "no-store" }),
         fetch("/api/employee?pageSize=200&status=Active", {
           credentials: "include",
           cache: "no-store",
@@ -87,6 +111,11 @@ export default function NetworkAccessSettingsPage() {
         settings?: { restrictionEnabled?: boolean };
         remoteEmployees?: RemoteAccessEmployee[];
       }>(settingsRes, "fetch");
+      const wfhJson = await readResponseJson<{
+        success: boolean;
+        message?: string;
+        companyWfhDays?: CompanyWfhDay[];
+      }>(wfhRes, "fetch");
       const employeesJson = await readResponseJson<{
         success?: boolean;
         message?: string;
@@ -100,12 +129,16 @@ export default function NetworkAccessSettingsPage() {
       if (!settingsJson.success) {
         throw new Error(settingsJson.message ?? "Failed to load network settings");
       }
+      if (!wfhJson.success) {
+        throw new Error(wfhJson.message ?? "Failed to load company WFH days");
+      }
 
       setNetworks(networksJson.networks ?? []);
       setServerClientIp(networksJson.clientIp?.trim() ?? "");
       setClientIp(publicIp || networksJson.clientIp?.trim() || "");
       setRestrictionEnabled(Boolean(settingsJson.settings?.restrictionEnabled));
       setRemoteEmployees(settingsJson.remoteEmployees ?? []);
+      setCompanyWfhDays(wfhJson.companyWfhDays ?? []);
       setEmployees(
         parseEmployeeListApiResponse(employeesJson)
           .map((row) => ({
@@ -285,10 +318,66 @@ export default function NetworkAccessSettingsPage() {
     }
   };
 
+  const addCompanyWfhDay = async () => {
+    if (!wfhDate.trim()) {
+      setError("Select a WFH date.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/network-access/company-wfh-days", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: wfhDate, note: wfhNote }),
+      });
+      const json = await readResponseJson<{ success: boolean; message?: string }>(res, "action");
+      if (!json.success) throw new Error(json.message ?? "Failed to add company WFH day");
+      setWfhNote("");
+      setWfhDate(localTodayIso());
+      setMessage(`Company WFH day added for ${formatWfhDate(wfhDate)}. Wi‑Fi restriction is off for everyone that day.`);
+      await loadAll();
+    } catch (err) {
+      setError(toUserFacingActionError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeCompanyWfhDay = async (day: CompanyWfhDay) => {
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/network-access/company-wfh-days", {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: day.id }),
+      });
+      const json = await readResponseJson<{ success: boolean; message?: string }>(res, "action");
+      if (!json.success) throw new Error(json.message ?? "Failed to remove company WFH day");
+      setPendingDelete(null);
+      setMessage("Company WFH day removed.");
+      await loadAll();
+    } catch (err) {
+      setError(toUserFacingActionError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const confirmPendingDelete = () => {
     if (!pendingDelete) return;
     if (pendingDelete.kind === "network") {
       void deleteNetwork(pendingDelete.network);
+      return;
+    }
+    if (pendingDelete.kind === "wfh") {
+      void removeCompanyWfhDay(pendingDelete.day);
       return;
     }
     void removeRemoteEmployee(pendingDelete.employee);
@@ -310,7 +399,7 @@ export default function NetworkAccessSettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="LAN / Wi‑Fi Restriction"
-        description="Allow the portal only from office router public IPs. Work-from-home employees can be exempted. HR and Super Admin always bypass this check so you can update IPs after a power cut."
+        description="Allow the portal only from office router public IPs. Work-from-home employees can be exempted individually, or mark company WFH days to lift restriction for everyone. HR and Super Admin always bypass this check so you can update IPs after a power cut."
         actions={
           <Badge variant={restrictionEnabled ? "warning" : "accent"}>
             {restrictionEnabled ? "Restriction on" : "Restriction off"}
@@ -538,6 +627,90 @@ export default function NetworkAccessSettingsPage() {
         </Card>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Company WFH days (no Wi‑Fi restriction)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-ex-muted text-xs">
+            On these dates, every employee can punch in / out from home — no need to add each
+            person to the remote access list. Restriction turns back on the next day.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] sm:items-end">
+            <div className="space-y-2">
+              <Label htmlFor="wfh-date">WFH date</Label>
+              <Input
+                id="wfh-date"
+                type="date"
+                value={wfhDate}
+                onChange={(e) => setWfhDate(e.target.value)}
+                disabled={saving || loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="wfh-note">Note (optional)</Label>
+              <Input
+                id="wfh-note"
+                value={wfhNote}
+                maxLength={120}
+                placeholder="e.g. Ganesh Chaturthi"
+                onChange={(e) => setWfhNote(e.target.value)}
+                disabled={saving || loading}
+              />
+            </div>
+            <Button
+              type="button"
+              disabled={saving || loading || !wfhDate}
+              onClick={() => void addCompanyWfhDay()}
+            >
+              <Plus className="mr-1 size-4" />
+              Add day
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            {loading ? (
+              <p className="text-ex-muted text-sm">Loading…</p>
+            ) : companyWfhDays.length === 0 ? (
+              <p className="text-ex-muted text-sm">No company WFH days scheduled.</p>
+            ) : (
+              companyWfhDays.map((day) => {
+                const isToday = day.date === localTodayIso();
+                return (
+                  <div
+                    key={day.id}
+                    className="border-ex-border bg-ex-elevated flex items-center gap-3 rounded-xl border p-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-ex-primary text-sm font-medium">
+                          {formatWfhDate(day.date)}
+                        </p>
+                        {isToday ? <Badge variant="accent">Today</Badge> : null}
+                      </div>
+                      <p className="text-ex-muted mt-0.5 text-xs">
+                        {day.note || "All employees unrestricted"}
+                        {day.createdByName ? ` · added by ${day.createdByName}` : ""}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="size-8 p-0"
+                      disabled={saving}
+                      aria-label={`Remove company WFH day ${day.date}`}
+                      onClick={() => setPendingDelete({ kind: "wfh", day })}
+                    >
+                      <Trash2 className="size-4 text-red-600 dark:text-red-400" />
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {pendingDelete ? (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-4 sm:items-center"
@@ -561,7 +734,11 @@ export default function NetworkAccessSettingsPage() {
               </div>
               <div className="min-w-0">
                 <h2 id="network-delete-title" className="text-ex-primary text-lg font-semibold">
-                  {pendingDelete.kind === "network" ? "Remove office IP?" : "Remove remote access?"}
+                  {pendingDelete.kind === "network"
+                    ? "Remove office IP?"
+                    : pendingDelete.kind === "wfh"
+                      ? "Remove company WFH day?"
+                      : "Remove remote access?"}
                 </h2>
                 <p className="text-ex-muted mt-1 text-sm">
                   {pendingDelete.kind === "network" ? (
@@ -572,6 +749,14 @@ export default function NetworkAccessSettingsPage() {
                       </span>{" "}
                       (<span className="font-mono text-xs">{pendingDelete.network.ip}</span>) from
                       the allowlist?
+                    </>
+                  ) : pendingDelete.kind === "wfh" ? (
+                    <>
+                      Remove company WFH for{" "}
+                      <span className="text-ex-primary font-medium">
+                        {formatWfhDate(pendingDelete.day.date)}
+                      </span>
+                      ? Wi‑Fi restriction will apply again that day.
                     </>
                   ) : (
                     <>

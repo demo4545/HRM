@@ -147,10 +147,11 @@ export const PATCH = withActiveSession(async (req, user) => {
     }
     if (
       status !== OVERTIME_REQUEST_STATUS.APPROVED &&
-      status !== OVERTIME_REQUEST_STATUS.REJECTED
+      status !== OVERTIME_REQUEST_STATUS.REJECTED &&
+      status !== OVERTIME_REQUEST_STATUS.CANCELLED
     ) {
       return NextResponse.json(
-        { success: false, message: "Status must be Approved or Rejected" },
+        { success: false, message: "Status must be Approved, Rejected, or Cancelled" },
         { status: 400 },
       );
     }
@@ -166,7 +167,10 @@ export const PATCH = withActiveSession(async (req, user) => {
       return NextResponse.json(
         {
           success: false,
-          message: "Only Super Admin can accept or reject overtime requests submitted by HR",
+          message:
+            status === OVERTIME_REQUEST_STATUS.CANCELLED
+              ? "Only Super Admin can cancel overtime requests submitted by HR"
+              : "Only Super Admin can accept or reject overtime requests submitted by HR",
         },
         { status: 403 },
       );
@@ -174,7 +178,10 @@ export const PATCH = withActiveSession(async (req, user) => {
 
     const request = await reviewOvertimeRequest({
       id,
-      status,
+      status: status as
+        | typeof OVERTIME_REQUEST_STATUS.APPROVED
+        | typeof OVERTIME_REQUEST_STATUS.REJECTED
+        | typeof OVERTIME_REQUEST_STATUS.CANCELLED,
       remarks,
       reviewerName: user.name,
     });

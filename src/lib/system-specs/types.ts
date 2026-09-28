@@ -46,7 +46,6 @@ export const EMPTY_LOGIN: LoginCredential = { username: "", password: "" };
 export const DEVICE_FIELDS = [
   { key: "laptop", label: "Laptop" },
   { key: "desktop", label: "Desktop" },
-  { key: "screen", label: "Screen" },
   { key: "keyboard", label: "Keyboard" },
   { key: "mouse", label: "Mouse" },
   { key: "cpu", label: "CPU" },

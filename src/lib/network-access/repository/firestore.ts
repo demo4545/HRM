@@ -3,7 +3,9 @@ import { randomUUID } from "node:crypto";
 import { getAdminFirestore } from "@/lib/firebase/admin";
 import { sheets } from "@/lib/google/auth";
 import { isValidIpv4, normalizeIp } from "@/lib/network-access/ip";
+import { localTodayIso } from "@/lib/attendance/manual-entry";
 import type {
+  CompanyWfhDay,
   NetworkAccessSettings,
   OfficeNetwork,
   RemoteAccessEmployee,
@@ -14,11 +16,14 @@ const SETTINGS_DOC = "settings";
 const META_DOC = "meta";
 const OFFICE_COLLECTION = "network_office_networks";
 const REMOTE_COLLECTION = "network_remote_access";
+const COMPANY_WFH_COLLECTION = "network_company_wfh_days";
 
 const OFFICE_SHEET = "Office Networks";
 const SETTINGS_SHEET = "Network Settings";
 const REMOTE_SHEET = "Remote Access";
 const RESTRICTION_KEY = "restriction_enabled";
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Short TTL + write invalidation: concurrent login/punch calls share one read,
@@ -32,10 +37,12 @@ type CacheEntry<T> = { value: T; expiresAt: number };
 let settingsCache: CacheEntry<NetworkAccessSettings> | null = null;
 let officeNetworksCache: CacheEntry<OfficeNetwork[]> | null = null;
 let remoteAccessCache: CacheEntry<RemoteAccessEmployee[]> | null = null;
+let companyWfhCache: CacheEntry<CompanyWfhDay[]> | null = null;
 
 let settingsInflight: Promise<NetworkAccessSettings> | null = null;
 let officeNetworksInflight: Promise<OfficeNetwork[]> | null = null;
 let remoteAccessInflight: Promise<RemoteAccessEmployee[]> | null = null;
+let companyWfhInflight: Promise<CompanyWfhDay[]> | null = null;
 
 let bootstrapPromise: Promise<void> | null = null;
 
@@ -46,6 +53,11 @@ function nowIso(): string {
 function parseEnabled(value: string): boolean {
   const v = value.trim().toLowerCase();
   return v === "true" || v === "1" || v === "yes";
+}
+
+function normalizeDateOnly(value: string): string {
+  const raw = value.trim().slice(0, 10);
+  return ISO_DATE.test(raw) ? raw : "";
 }
 
 function rowToNetwork(row: string[]): OfficeNetwork | null {
@@ -178,9 +190,11 @@ export function clearNetworkAccessCachesFirestore(): void {
   settingsCache = null;
   officeNetworksCache = null;
   remoteAccessCache = null;
+  companyWfhCache = null;
   settingsInflight = null;
   officeNetworksInflight = null;
   remoteAccessInflight = null;
+  companyWfhInflight = null;
 }
 
 export async function getNetworkAccessSettingsFirestore(): Promise<NetworkAccessSettings> {
@@ -405,4 +419,94 @@ export async function removeRemoteAccessEmployeeFirestore(id: string): Promise<b
   await ref.delete();
   clearNetworkAccessCachesFirestore();
   return true;
+}
+
+export async function listCompanyWfhDaysFirestore(): Promise<CompanyWfhDay[]> {
+  if (companyWfhCache && Date.now() < companyWfhCache.expiresAt) {
+    return companyWfhCache.value;
+  }
+  if (companyWfhInflight) return companyWfhInflight;
+
+  companyWfhInflight = (async () => {
+    await ensureNetworkAccessBootstrapped();
+    const snap = await getAdminFirestore().collection(COMPANY_WFH_COLLECTION).get();
+    const value = snap.docs
+      .map((doc) => {
+        const data = doc.data() as Partial<CompanyWfhDay>;
+        const date = normalizeDateOnly(String(data.date ?? doc.id));
+        if (!date) return null;
+        return {
+          id: String(data.id ?? doc.id),
+          date,
+          note: String(data.note ?? "").trim(),
+          createdAt: String(data.createdAt ?? ""),
+          createdByName: String(data.createdByName ?? "").trim(),
+        } satisfies CompanyWfhDay;
+      })
+      .filter((row): row is CompanyWfhDay => Boolean(row))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    companyWfhCache = { value, expiresAt: Date.now() + NETWORK_CACHE_TTL_MS };
+    return value;
+  })().finally(() => {
+    companyWfhInflight = null;
+  });
+
+  return companyWfhInflight;
+}
+
+export async function addCompanyWfhDayFirestore(input: {
+  date: string;
+  note?: string;
+  createdByName?: string;
+}): Promise<CompanyWfhDay> {
+  await ensureNetworkAccessBootstrapped();
+  const date = normalizeDateOnly(input.date);
+  if (!date) {
+    throw new Error("A valid WFH date (YYYY-MM-DD) is required");
+  }
+
+  const existing = await listCompanyWfhDaysFirestore();
+  if (existing.some((row) => row.date === date)) {
+    throw new Error("This date is already marked as a company WFH day");
+  }
+
+  const record: CompanyWfhDay = {
+    id: date,
+    date,
+    note: String(input.note ?? "")
+      .trim()
+      .slice(0, 120),
+    createdAt: nowIso(),
+    createdByName: String(input.createdByName ?? "").trim(),
+  };
+
+  await getAdminFirestore().collection(COMPANY_WFH_COLLECTION).doc(date).set(record);
+  clearNetworkAccessCachesFirestore();
+  return record;
+}
+
+export async function removeCompanyWfhDayFirestore(id: string): Promise<boolean> {
+  await ensureNetworkAccessBootstrapped();
+  const key = normalizeDateOnly(id) || id.trim();
+  if (!key) return false;
+  const ref = getAdminFirestore().collection(COMPANY_WFH_COLLECTION).doc(key);
+  const snap = await ref.get();
+  if (!snap.exists) return false;
+  await ref.delete();
+  clearNetworkAccessCachesFirestore();
+  return true;
+}
+
+/** True when restriction should be skipped for everyone on this calendar day. */
+export async function isCompanyWfhDayFirestore(dateIso?: string): Promise<boolean> {
+  const date = normalizeDateOnly(dateIso ?? localTodayIso());
+  if (!date) return false;
+
+  if (companyWfhCache && Date.now() < companyWfhCache.expiresAt) {
+    return companyWfhCache.value.some((row) => row.date === date);
+  }
+
+  await ensureNetworkAccessBootstrapped();
+  const snap = await getAdminFirestore().collection(COMPANY_WFH_COLLECTION).doc(date).get();
+  return snap.exists;
 }

@@ -184,11 +184,6 @@ export default function SystemSpecsAdminPage() {
         render: (row) => <span className="whitespace-pre-wrap">{row.desktop}</span>,
       },
       {
-        key: "screen",
-        header: "Screen",
-        render: (row) => <span className="whitespace-pre-wrap">{row.screen}</span>,
-      },
-      {
         key: "keyboard",
         header: "Keyboard",
         render: (row) => <span className="whitespace-pre-wrap">{row.keyboard}</span>,

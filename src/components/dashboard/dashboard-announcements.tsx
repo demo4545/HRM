@@ -3,13 +3,11 @@
 import { readResponseJson } from "@/lib/api/read-response-json";
 import Link from "next/link";
 import { Megaphone } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/auth-provider";
-import { useNotifications } from "@/contexts/notifications-provider";
 import { canManageEmployees } from "@/lib/auth/roles";
-import { NOTIFICATION_TYPES } from "@/lib/notifications/types";
 import { cn } from "@/lib/utils";
 
 type AnnouncementCategory = "general" | "office_leave" | "important";
@@ -55,24 +53,15 @@ function normalizeMessage(value: string): string {
     .trim();
 }
 
-function inferCategory(title: string, body: string): AnnouncementCategory {
-  const text = `${title} ${body}`.toLowerCase();
-  if (/\b(urgent|important|critical)\b/.test(text)) return "important";
-  if (/\b(office|closed|leave|holiday|visarjan)\b/.test(text)) return "office_leave";
-  return "general";
-}
-
 export function DashboardAnnouncements({ className }: { className?: string }) {
   const { user } = useAuth();
-  const { notifications } = useNotifications();
   const canManage = user ? canManageEmployees(user.role) : false;
   const [announcements, setAnnouncements] = useState<DashboardAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    void fetch(`/api/announcements?limit=${DASHBOARD_ANNOUNCEMENT_LIMIT}`, {
+    void fetch(`/api/announcements?limit=${DASHBOARD_ANNOUNCEMENT_LIMIT}&activeOnly=1`, {
       cache: "no-store",
       credentials: "include",
     })
@@ -89,12 +78,10 @@ export function DashboardAnnouncements({ className }: { className?: string }) {
       .then((records) => {
         if (cancelled) return;
         setAnnouncements(records);
-        setLoadFailed(false);
       })
       .catch(() => {
         if (cancelled) return;
         setAnnouncements([]);
-        setLoadFailed(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -105,21 +92,7 @@ export function DashboardAnnouncements({ className }: { className?: string }) {
     };
   }, []);
 
-  const fromNotifications = useMemo((): DashboardAnnouncement[] => {
-    return notifications
-      .filter((item) => item.type === NOTIFICATION_TYPES.ANNOUNCEMENT)
-      .slice(0, DASHBOARD_ANNOUNCEMENT_LIMIT)
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        message: item.body,
-        category: inferCategory(item.title, item.body),
-        authorName: "",
-        createdAt: item.createdAt,
-      }));
-  }, [notifications]);
-
-  const items = announcements.length > 0 ? announcements : loadFailed ? fromNotifications : [];
+  const items = announcements;
   const viewAllHref = canManage ? "/notifications/announcements" : "/notifications";
 
   if (loading) {
@@ -138,14 +111,43 @@ export function DashboardAnnouncements({ className }: { className?: string }) {
     return (
       <div
         className={cn(
-          "border-ex-border bg-ex-elevated flex h-full min-h-[9.5rem] flex-col justify-center rounded-xl border border-dashed px-4 py-3",
+          "border-ex-border bg-ex-elevated flex h-full min-h-[9.5rem] flex-col rounded-xl border border-dashed p-3 shadow-sm dark:shadow-none",
           className,
         )}
       >
-        <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
-          Company announcements
-        </p>
-        <p className="text-ex-muted mt-1 text-sm">No announcements right now.</p>
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+          <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
+            Company announcements
+          </p>
+          {canManage ? (
+            <Link
+              href="/notifications/announcements"
+              className="text-ex-secondary text-xs font-medium underline-offset-2 hover:underline"
+            >
+              Publish
+            </Link>
+          ) : (
+            <Link
+              href={viewAllHref}
+              className="text-ex-secondary text-xs font-medium underline-offset-2 hover:underline"
+            >
+              View all
+            </Link>
+          )}
+        </div>
+        <div className="flex min-h-0 flex-1 items-center gap-3 px-1">
+          <div className="bg-ex-secondary/10 text-ex-secondary flex size-10 shrink-0 items-center justify-center rounded-full">
+            <Megaphone className="size-4" aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <p className="text-ex-primary text-sm font-medium">No announcements</p>
+            <p className="text-ex-muted mt-0.5 text-xs leading-snug">
+              {canManage
+                ? "No active notices. Publish one when you need to reach the team."
+                : "No active company notices today. Check back later for updates."}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
