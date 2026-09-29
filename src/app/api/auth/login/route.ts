@@ -1,18 +1,19 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
-import { syncAbsenceGateForUser } from "@/lib/attendance/absence-gate-sync";
 import {
   setAbsenceGateCookie,
   setMorningPunchGateCookie,
 } from "@/lib/attendance/absence-gate-cookie";
 import { roleRequiresAbsenceExplanationGate } from "@/lib/attendance/absence-gate";
-import { userRequiresMorningPunchGate } from "@/lib/attendance/morning-punch-gate";
+import { syncAbsenceGateForUser } from "@/lib/attendance/absence-gate-sync";
 import { ensureForgottenPunchOutForUser } from "@/lib/attendance/auto-punch-out";
+import { userRequiresMorningPunchGate } from "@/lib/attendance/morning-punch-gate";
 import { authenticateFromSheet } from "@/lib/auth/login";
 import { evaluateNetworkAccess } from "@/lib/network-access/gate";
 import { isValidIpv4, normalizeIp } from "@/lib/network-access/ip";
 import { setNetworkGateCookie } from "@/lib/network-access/network-gate-cookie";
 import { COOKIE, encodeSession, sessionCookieOptionsForRole } from "@/lib/session";
+import type { SessionUser } from "@/types/auth";
 
 const LOGIN_RETRY_DELAYS_MS = [150, 350];
 
@@ -36,6 +37,28 @@ async function authenticateWithRetry(login: string, password: string) {
     }
   }
   throw lastError instanceof Error ? lastError : new Error("Authentication failed");
+}
+
+/**
+ * Heavy punch-desk gates run after the login response so sign-in is not blocked.
+ * DashboardShell already calls /api/auth/absence-gate and redirects when needed.
+ */
+function schedulePostLoginGates(user: SessionUser): void {
+  if (!roleRequiresAbsenceExplanationGate(user.role)) return;
+
+  after(() => {
+    void Promise.all([
+      syncAbsenceGateForUser(user).catch((error) => {
+        console.warn("[auth/login] background absence gate failed:", error);
+      }),
+      userRequiresMorningPunchGate(user).catch((error) => {
+        console.warn("[auth/login] background morning punch gate failed:", error);
+      }),
+      ensureForgottenPunchOutForUser(user).catch((error) => {
+        console.warn("[auth/login] auto punch-out catch-up failed:", error);
+      }),
+    ]);
+  });
 }
 
 export async function POST(req: Request) {
@@ -75,61 +98,39 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-    let requiresAbsenceExplanation = false;
-    let requiresMorningPunch = false;
-    const gateRole = roleRequiresAbsenceExplanationGate(result.user.role);
+    // Only the network gate must finish before redirect (security). Absence /
+    // morning punch gates are deferred — DashboardShell syncs them after load.
+    const network = await evaluateNetworkAccess(req, result.user, {
+      reportedPublicIp: safeReportedIp,
+    }).catch((error) => {
+      console.warn("[auth/login] network check failed, allowing temporary access:", error);
+      return {
+        allowed: true,
+        reason: "restriction_disabled" as const,
+        clientIp: safeReportedIp ?? "",
+      };
+    });
 
-    // Prefer cache from a recent gate sync; forceRefresh only when cookie/state is stale.
-    const [absenceResult, morningResult, networkResult] = await Promise.all([
-      gateRole
-        ? syncAbsenceGateForUser(result.user).catch((error) => {
-            console.warn("[auth/login] absence gate sync failed:", error);
-            return false;
-          })
-        : Promise.resolve(false),
-      gateRole
-        ? userRequiresMorningPunchGate(result.user).catch((error) => {
-            console.warn("[auth/login] morning punch gate sync failed:", error);
-            return false;
-          })
-        : Promise.resolve(false),
-      evaluateNetworkAccess(req, result.user, {
-        reportedPublicIp: safeReportedIp,
-      }).catch((error) => {
-        console.warn("[auth/login] network check failed, allowing temporary access:", error);
-        return {
-          allowed: true,
-          reason: "restriction_disabled" as const,
-          clientIp: safeReportedIp ?? "",
-        };
-      }),
-    ]);
-
-    requiresAbsenceExplanation = absenceResult;
-    requiresMorningPunch = morningResult;
-    const network = networkResult;
-
-    if (gateRole) {
-      void ensureForgottenPunchOutForUser(result.user).catch((error) => {
-        console.warn("[auth/login] auto punch-out catch-up failed:", error);
-      });
-    }
+    schedulePostLoginGates(result.user);
 
     const token = encodeSession({ ...result.user, loggedInAt: Date.now() });
-    const requiresSiteGate = requiresAbsenceExplanation || requiresMorningPunch;
     const res = NextResponse.json({
       ok: true,
       user: result.user,
-      requiresAbsenceExplanation,
-      requiresMorningPunch,
-      requiresSiteGate,
+      // Provisional: real values are set by /api/auth/absence-gate after navigation.
+      requiresAbsenceExplanation: false,
+      requiresMorningPunch: false,
+      requiresSiteGate: false,
       networkAllowed: network.allowed,
       networkReason: network.reason,
       clientIp: network.clientIp,
+      gatesDeferred: true,
     });
     res.cookies.set(COOKIE, token, sessionCookieOptionsForRole(result.user.role));
-    setAbsenceGateCookie(res, requiresAbsenceExplanation);
-    setMorningPunchGateCookie(res, requiresMorningPunch);
+    // Clear punch-desk gate cookies so middleware does not block on stale values.
+    // DashboardShell + /api/auth/absence-gate refresh them right after load.
+    setAbsenceGateCookie(res, false);
+    setMorningPunchGateCookie(res, false);
     setNetworkGateCookie(res, network.allowed, network.clientIp);
     return res;
   } catch (error) {

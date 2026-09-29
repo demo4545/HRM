@@ -3,11 +3,14 @@ import { getAttendanceSpreadsheetIdFromRow } from "@/lib/attendance/employee";
 import { listLeaveApplications, type LeaveApplication } from "@/lib/attendance/leave-approvals";
 import { parseLeaveDisplayDate } from "@/lib/attendance/leave-range-display";
 import { LEAVE_STATUS } from "@/lib/attendance/leave-status";
-import { formatIsoDate } from "@/lib/attendance/time";
+import { formatIsoDate, getAppZonedParts } from "@/lib/attendance/time";
 import { getEmployeeIdFromRow, isEmployeeStatusActive, sheetRowToForm } from "@/lib/employee";
 import { listAllEmployeeRows } from "@/lib/employees/repository";
 import { isFirebaseDailyStorage } from "@/lib/storage/backend";
 import type { UserRole } from "@/types/auth";
+
+/** Midday split between first-half (AM) and second-half (PM) leave — matches punch gate. */
+export const HALF_DAY_LEAVE_SPLIT_HOUR = 14;
 
 export type OnLeaveEmployee = {
   id: string;
@@ -77,6 +80,47 @@ function applicationDateIso(application: LeaveApplication): string {
   return parsed ? formatIsoDate(parsed) : "";
 }
 
+function isHalfAmDuration(duration: string): boolean {
+  const normalized = duration.trim().toLowerCase();
+  return normalized.includes("half") && normalized.includes("am");
+}
+
+function isHalfPmDuration(duration: string): boolean {
+  const normalized = duration.trim().toLowerCase();
+  return normalized.includes("half") && normalized.includes("pm");
+}
+
+/**
+ * Half-day leave only counts as "on leave" during that half of the day.
+ * Full-day (and ambiguous) leave stays visible for the whole date.
+ */
+export function isOnLeaveVisibleAt(duration: string, now: Date = new Date()): boolean {
+  const isHalfAm = isHalfAmDuration(duration);
+  const isHalfPm = isHalfPmDuration(duration);
+  if (!isHalfAm && !isHalfPm) return true;
+
+  const { hour, minute } = getAppZonedParts(now);
+  const minutes = hour * 60 + minute;
+  const split = HALF_DAY_LEAVE_SPLIT_HOUR * 60;
+
+  if (isHalfAm) return minutes < split;
+  return minutes >= split;
+}
+
+function filterEmployeesForDashboardView(
+  data: OnLeaveDashboardData,
+  dateIso: string,
+  now: Date,
+): OnLeaveDashboardData {
+  // Historical / future dates: show everyone who had leave that day.
+  if (dateIso !== formatIsoDate(now)) return data;
+
+  return {
+    ...data,
+    employees: data.employees.filter((employee) => isOnLeaveVisibleAt(employee.duration, now)),
+  };
+}
+
 async function loadEmployeesOnLeave(dateIso: string): Promise<OnLeaveDashboardData> {
   const employees = await listActiveEmployeesForLeaveTracking();
 
@@ -122,12 +166,20 @@ async function loadEmployeesOnLeave(dateIso: string): Promise<OnLeaveDashboardDa
   };
 }
 
-export async function listEmployeesOnLeave(dateIso: string): Promise<OnLeaveDashboardData> {
+export async function listEmployeesOnLeave(
+  dateIso: string,
+  now: Date = new Date(),
+): Promise<OnLeaveDashboardData> {
   const cached = onLeaveCache.get(dateIso);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached && cached.expiresAt > Date.now()) {
+    return filterEmployeesForDashboardView(cached.value, dateIso, now);
+  }
 
   const pending = onLeaveRequests.get(dateIso);
-  if (pending) return pending;
+  if (pending) {
+    const value = await pending;
+    return filterEmployeesForDashboardView(value, dateIso, now);
+  }
 
   const request = loadEmployeesOnLeave(dateIso)
     .then((value) => {
@@ -142,5 +194,6 @@ export async function listEmployeesOnLeave(dateIso: string): Promise<OnLeaveDash
     });
 
   onLeaveRequests.set(dateIso, request);
-  return request;
+  const value = await request;
+  return filterEmployeesForDashboardView(value, dateIso, now);
 }
