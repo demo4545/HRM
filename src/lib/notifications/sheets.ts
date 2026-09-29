@@ -389,3 +389,72 @@ export async function countUnreadNotifications(recipientSheetRow: number): Promi
   const notifications = await listNotificationsForRecipient(recipientSheetRow);
   return notifications.filter((n) => !n.read).length;
 }
+
+export async function updateNotificationsByDedupePrefix(params: {
+  dedupePrefix: string;
+  title: string;
+  body: string;
+  markUnread?: boolean;
+}): Promise<number> {
+  const prefix = params.dedupePrefix.trim();
+  if (!prefix) return 0;
+
+  const rows = await readNotificationRows();
+  const updates: Array<{ sheetRow: number; record: NotificationRecord }> = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const record = rowToRecord(rows[i] ?? []);
+    if (!record?.dedupeKey?.startsWith(prefix)) continue;
+    updates.push({
+      sheetRow: i + 2,
+      record: {
+        ...record,
+        title: params.title,
+        body: params.body,
+        read: params.markUnread === false ? record.read : false,
+      },
+    });
+  }
+
+  if (updates.length === 0) return 0;
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      valueInputOption: "USER_ENTERED",
+      data: updates.map((entry) => ({
+        range: sheetRowRange(entry.sheetRow, NOTIFICATION_HEADERS.length),
+        values: [recordToRow(entry.record)],
+      })),
+    },
+  });
+
+  return updates.length;
+}
+
+export async function deleteNotificationsByDedupePrefix(dedupePrefix: string): Promise<number> {
+  const prefix = dedupePrefix.trim();
+  if (!prefix) return 0;
+
+  const rows = await readNotificationRows();
+  const sheetRows: number[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const record = rowToRecord(rows[i] ?? []);
+    if (!record?.dedupeKey?.startsWith(prefix)) continue;
+    sheetRows.push(i + 2);
+  }
+
+  if (sheetRows.length === 0) return 0;
+
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId,
+    requestBody: {
+      ranges: sheetRows.map(
+        (sheetRow) => `${NOTIFICATIONS_SHEET_NAME}!A${sheetRow}:K${sheetRow}`,
+      ),
+    },
+  });
+
+  return sheetRows.length;
+}

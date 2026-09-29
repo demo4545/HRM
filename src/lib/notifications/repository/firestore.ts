@@ -239,3 +239,77 @@ export async function countUnreadNotificationsFirestore(
   const notifications = await listNotificationsForRecipientFirestore(recipientSheetRow);
   return notifications.filter((n) => !n.read).length;
 }
+
+/** Update title/body for all notifications whose dedupeKey starts with the prefix. */
+export async function updateNotificationsByDedupePrefixFirestore(params: {
+  dedupePrefix: string;
+  title: string;
+  body: string;
+  markUnread?: boolean;
+}): Promise<number> {
+  const prefix = params.dedupePrefix.trim();
+  if (!prefix) return 0;
+
+  await ensureNotificationsBootstrapped();
+  const snap = await getAdminFirestore()
+    .collection(COLLECTION)
+    .where("dedupeKey", ">=", prefix)
+    .where("dedupeKey", "<", `${prefix}\uf8ff`)
+    .get();
+
+  if (snap.empty) return 0;
+
+  const db = getAdminFirestore();
+  const batch = db.batch();
+  let updated = 0;
+  for (const doc of snap.docs) {
+    if (doc.id === META_DOC) continue;
+    const record = doc.data() as NotificationRecord;
+    if (!String(record.dedupeKey ?? "").startsWith(prefix)) continue;
+    batch.set(
+      doc.ref,
+      {
+        ...record,
+        title: params.title,
+        body: params.body,
+        read: params.markUnread === false ? record.read : false,
+      },
+      { merge: true },
+    );
+    updated += 1;
+  }
+  if (updated === 0) return 0;
+  await batch.commit();
+  return updated;
+}
+
+/** Delete all notifications whose dedupeKey starts with the prefix. */
+export async function deleteNotificationsByDedupePrefixFirestore(
+  dedupePrefix: string,
+): Promise<number> {
+  const prefix = dedupePrefix.trim();
+  if (!prefix) return 0;
+
+  await ensureNotificationsBootstrapped();
+  const snap = await getAdminFirestore()
+    .collection(COLLECTION)
+    .where("dedupeKey", ">=", prefix)
+    .where("dedupeKey", "<", `${prefix}\uf8ff`)
+    .get();
+
+  if (snap.empty) return 0;
+
+  const db = getAdminFirestore();
+  const batch = db.batch();
+  let deleted = 0;
+  for (const doc of snap.docs) {
+    if (doc.id === META_DOC) continue;
+    const record = doc.data() as NotificationRecord;
+    if (!String(record.dedupeKey ?? "").startsWith(prefix)) continue;
+    batch.delete(doc.ref);
+    deleted += 1;
+  }
+  if (deleted === 0) return 0;
+  await batch.commit();
+  return deleted;
+}

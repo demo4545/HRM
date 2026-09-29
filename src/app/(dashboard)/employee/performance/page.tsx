@@ -64,19 +64,25 @@ const CHART_COLORS = [
   "var(--ex-chart-3)",
   "var(--ex-chart-4)",
   "var(--ex-chart-5)",
+  "var(--ex-chart-6)",
+  "var(--ex-chart-7)",
+  "var(--ex-chart-8)",
+  "var(--ex-chart-9)",
+  "var(--ex-chart-10)",
 ];
 
-/** Stable colors for Attendance status (Overtime ↔ In Progress vs index order). */
+/** Unique stable colors for each Attendance status label. */
 const ATTENDANCE_STATUS_COLORS: Record<string, string> = {
   Completed: "var(--ex-chart-1)",
-  Overtime: "var(--ex-chart-3)",
-  "Overtime Approved": "var(--ex-chart-3)",
-  "Overtime Rejected": "var(--ex-chart-3)",
-  "Overtime Requested": "var(--ex-chart-3)",
   "In Progress": "var(--ex-chart-2)",
-  "On Leave": "var(--ex-chart-4)",
+  Overtime: "var(--ex-chart-3)",
+  "Short Hours": "var(--ex-chart-4)",
   Absent: "var(--ex-chart-5)",
-  Short: "var(--ex-chart-5)",
+  "Overtime Approved": "var(--ex-chart-6)",
+  "Overtime Requested": "var(--ex-chart-7)",
+  "OT Approval Pending": "var(--ex-chart-7)",
+  "Overtime Rejected": "var(--ex-chart-8)",
+  "On Leave": "var(--ex-chart-9)",
 };
 
 const EMPTY_SUMMARY: EmployeePerformanceSummary = {

@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { DEFAULT_PAGE_SIZE, Pagination } from "@/components/ui/pagination";
 import { RefreshCw } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -102,6 +103,36 @@ function emptyCopy(filter: StatusFilter): { title: string; description: string }
   };
 }
 
+async function reviewLeaveRequest(
+  row: LeaveApprovalRow,
+  status: "Accepted" | "Rejected",
+  reason = "",
+): Promise<{ email?: { sent?: boolean; reason?: string; to?: string } }> {
+  const res = await fetch("/api/employee/leaves/review", {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      employeeId: row.employeeId,
+      attendanceSpreadsheetId: row.attendanceSpreadsheetId,
+      rowIndex: row.rowIndex,
+      leaveType: row.leaveType,
+      status,
+      rejectReason: reason,
+    }),
+  });
+
+  const data = await readResponseJson<{
+    success?: boolean;
+    message?: string;
+    email?: { sent?: boolean; reason?: string; to?: string };
+  }>(res, "action");
+  if (!data.success) {
+    throw new Error(data.message ?? "Failed to review leave");
+  }
+  return { email: data.email };
+}
+
 export default function LeaveApprovalsPage() {
   const { refresh: refreshNotifications, pushToast } = useNotifications();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(LEAVE_STATUS.APPLIED);
@@ -111,8 +142,12 @@ export default function LeaveApprovalsPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [rows, setRows] = useState<LeaveApprovalRow[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [rejectReason, setRejectReason] = useState("");
   const [rejectingRow, setRejectingRow] = useState<LeaveApprovalRow | null>(null);
+  const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
+  const [bulkRejectReason, setBulkRejectReason] = useState("");
 
   const loadApprovals = useCallback(async () => {
     setLoading(true);
@@ -134,9 +169,11 @@ export default function LeaveApprovalsPage() {
 
       setRows(sortApprovalsByDate(data.applications ?? []));
       setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
+      setSelectedIds(new Set());
     } catch (err) {
       setError(toUserFacingFetchError(err));
       setRows([]);
+      setSelectedIds(new Set());
     } finally {
       setLoading(false);
     }
@@ -160,9 +197,48 @@ export default function LeaveApprovalsPage() {
     [rows, currentPage],
   );
 
+  const pendingOnPage = useMemo(
+    () => paginatedRows.filter((row) => isPendingStatus(row.status)),
+    [paginatedRows],
+  );
+
+  const selectedPendingRows = useMemo(
+    () => rows.filter((row) => selectedIds.has(row.id) && isPendingStatus(row.status)),
+    [rows, selectedIds],
+  );
+
+  const selectedCount = selectedPendingRows.length;
+  const showBulkActions = selectedCount > 1;
+  const allPendingOnPageSelected =
+    pendingOnPage.length > 0 && pendingOnPage.every((row) => selectedIds.has(row.id));
+
   const showRejectReasonColumn = statusFilter === LEAVE_STATUS.REJECTED || statusFilter === "all";
   const showActions = statusFilter === LEAVE_STATUS.APPLIED || statusFilter === "all";
   const emptyState = emptyCopy(statusFilter);
+  const actionsBusy = reviewingId != null || bulkBusy;
+
+  function toggleRowSelected(row: LeaveApprovalRow) {
+    if (!isPendingStatus(row.status) || actionsBusy) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(row.id)) next.delete(row.id);
+      else next.add(row.id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllOnPage() {
+    if (actionsBusy || pendingOnPage.length === 0) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPendingOnPageSelected) {
+        for (const row of pendingOnPage) next.delete(row.id);
+      } else {
+        for (const row of pendingOnPage) next.add(row.id);
+      }
+      return next;
+    });
+  }
 
   const reviewApplication = async (
     row: LeaveApprovalRow,
@@ -172,31 +248,16 @@ export default function LeaveApprovalsPage() {
     setReviewingId(row.id);
     setError(null);
     try {
-      const res = await fetch("/api/employee/leaves/review", {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employeeId: row.employeeId,
-          attendanceSpreadsheetId: row.attendanceSpreadsheetId,
-          rowIndex: row.rowIndex,
-          leaveType: row.leaveType,
-          status,
-          rejectReason: reason,
-        }),
-      });
-
-      const data = await readResponseJson<{
-        success?: boolean;
-        message?: string;
-        email?: { sent?: boolean; reason?: string; to?: string };
-      }>(res, "action");
-      if (!data.success) {
-        throw new Error(data.message ?? "Failed to review leave");
-      }
+      const data = await reviewLeaveRequest(row, status, reason);
 
       setRejectingRow(null);
       setRejectReason("");
+      setSelectedIds((prev) => {
+        if (!prev.has(row.id)) return prev;
+        const next = new Set(prev);
+        next.delete(row.id);
+        return next;
+      });
       await loadApprovals();
       await refreshNotifications();
 
@@ -230,11 +291,53 @@ export default function LeaveApprovalsPage() {
     await reviewApplication(rejectingRow, "Rejected", rejectReason.trim());
   };
 
+  const runBulkReview = async (status: "Accepted" | "Rejected", reason = "") => {
+    const targets = selectedPendingRows;
+    if (targets.length < 2) return;
+
+    setBulkBusy(true);
+    setError(null);
+    setBulkRejectOpen(false);
+
+    let succeeded = 0;
+    const failures: string[] = [];
+
+    for (const row of targets) {
+      try {
+        await reviewLeaveRequest(row, status, reason);
+        succeeded += 1;
+      } catch (err) {
+        failures.push(`${row.employeeName} (${row.date}): ${toUserFacingActionError(err)}`);
+      }
+    }
+
+    setSelectedIds(new Set());
+    setBulkRejectReason("");
+    await loadApprovals();
+    await refreshNotifications();
+    setBulkBusy(false);
+
+    if (succeeded > 0) {
+      pushToast({
+        title: status === "Accepted" ? "Leaves approved" : "Leaves rejected",
+        body: `${succeeded} leave request${succeeded === 1 ? "" : "s"} ${status.toLowerCase()}. Employees have been notified.`,
+        href: "/notifications",
+        variant: "success",
+      });
+    }
+
+    if (failures.length > 0) {
+      setError(
+        `${failures.length} request${failures.length === 1 ? "" : "s"} failed:\n${failures.slice(0, 5).join("\n")}${failures.length > 5 ? `\n…and ${failures.length - 5} more` : ""}`,
+      );
+    }
+  };
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="Leave Approvals"
-        description="Review leave and attendance correction requests from all employees. HR and Super Admin can accept or reject pending items; leave rejection requires a reason."
+        description="Review leave and attendance correction requests from all employees. HR and Super Admin can accept or reject pending items; leave rejection requires a reason. Select multiple pending rows to approve or reject in bulk."
         actions={
           <div className="flex items-center gap-2">
             {statusFilter === LEAVE_STATUS.APPLIED ? (
@@ -246,7 +349,7 @@ export default function LeaveApprovalsPage() {
               variant="outline"
               size="sm"
               onClick={() => void loadApprovals()}
-              disabled={loading}
+              disabled={loading || actionsBusy}
             >
               <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
               Refresh
@@ -265,6 +368,7 @@ export default function LeaveApprovalsPage() {
             onClick={() => {
               setStatusFilter(filter.id);
               setPage(1);
+              setSelectedIds(new Set());
             }}
             className={cn(
               "inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium transition",
@@ -278,6 +382,44 @@ export default function LeaveApprovalsPage() {
         ))}
       </div>
 
+      {showBulkActions ? (
+        <div className="border-ex-border bg-ex-elevated flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
+          <p className="text-ex-primary text-sm font-medium">
+            {selectedCount} pending leave{selectedCount === 1 ? "" : "s"} selected
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={actionsBusy}
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={actionsBusy}
+              onClick={() => void runBulkReview("Accepted")}
+            >
+              {bulkBusy ? "Working…" : "Bulk accept"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={actionsBusy}
+              onClick={() => {
+                setBulkRejectReason("");
+                setBulkRejectOpen(true);
+                setError(null);
+              }}
+            >
+              Bulk reject
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {warnings.length > 0 ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           <p className="font-medium">Some employees could not be loaded</p>
@@ -290,7 +432,7 @@ export default function LeaveApprovalsPage() {
       ) : null}
 
       {error ? (
-        <p className="border-ex-banner-danger-border bg-ex-banner-danger-bg text-ex-banner-danger-fg rounded-xl border px-4 py-3 text-sm">
+        <p className="border-ex-banner-danger-border bg-ex-banner-danger-bg text-ex-banner-danger-fg whitespace-pre-line rounded-xl border px-4 py-3 text-sm">
           {error}
         </p>
       ) : null}
@@ -310,6 +452,7 @@ export default function LeaveApprovalsPage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
+              disabled={actionsBusy}
               onClick={() => {
                 setRejectingRow(null);
                 setRejectReason("");
@@ -320,7 +463,7 @@ export default function LeaveApprovalsPage() {
             <Button
               variant="secondary"
               onClick={() => void submitReject()}
-              disabled={reviewingId === rejectingRow.id}
+              disabled={actionsBusy}
             >
               {reviewingId === rejectingRow.id ? "Rejecting..." : "Confirm reject"}
             </Button>
@@ -335,6 +478,36 @@ export default function LeaveApprovalsPage() {
           emptyTitle={emptyState.title}
           emptyDescription={emptyState.description}
           columns={[
+            ...(showActions
+              ? [
+                  {
+                    key: "id" as const,
+                    header: (
+                      <input
+                        type="checkbox"
+                        className="accent-ex-secondary size-4"
+                        checked={allPendingOnPageSelected}
+                        disabled={actionsBusy || pendingOnPage.length === 0}
+                        aria-label="Select all pending leaves on this page"
+                        onChange={toggleSelectAllOnPage}
+                      />
+                    ),
+                    render: (r: LeaveApprovalRow) =>
+                      isPendingStatus(r.status) ? (
+                        <input
+                          type="checkbox"
+                          className="accent-ex-secondary size-4"
+                          checked={selectedIds.has(r.id)}
+                          disabled={actionsBusy}
+                          aria-label={`Select leave for ${r.employeeName} on ${r.date}`}
+                          onChange={() => toggleRowSelected(r)}
+                        />
+                      ) : (
+                        <span className="text-ex-muted">—</span>
+                      ),
+                  },
+                ]
+              : []),
             { key: "employeeName", header: "Employee" },
             {
               key: "leaveType",
@@ -370,7 +543,7 @@ export default function LeaveApprovalsPage() {
             ...(showActions
               ? [
                   {
-                    key: "id" as const,
+                    key: "actions" as const,
                     header: "Actions",
                     render: (r: LeaveApprovalRow) =>
                       isPendingStatus(r.status) ? (
@@ -378,7 +551,7 @@ export default function LeaveApprovalsPage() {
                           <Button
                             size="sm"
                             variant="secondary"
-                            disabled={reviewingId === r.id}
+                            disabled={actionsBusy}
                             onClick={() => void reviewApplication(r, "Accepted")}
                           >
                             {reviewingId === r.id ? "..." : "Accept"}
@@ -386,7 +559,7 @@ export default function LeaveApprovalsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={reviewingId === r.id}
+                            disabled={actionsBusy}
                             onClick={() => {
                               setRejectingRow(r);
                               setRejectReason("");
@@ -418,6 +591,35 @@ export default function LeaveApprovalsPage() {
           />
         ) : null}
       </div>
+
+      <ConfirmationDialog
+        open={bulkRejectOpen}
+        title="Reject selected leave requests?"
+        description={
+          <>
+            Reject <span className="text-ex-primary font-medium">{selectedCount}</span> pending leave
+            request{selectedCount === 1 ? "" : "s"}. The same reason will be applied to all selected
+            items.
+          </>
+        }
+        confirmText="Reject all"
+        confirmVariant="danger"
+        busy={bulkBusy}
+        busyText="Rejecting…"
+        inputLabel="Rejection reason (required)"
+        inputValue={bulkRejectReason}
+        onInputChange={setBulkRejectReason}
+        inputPlaceholder="Enter the reason for rejection"
+        inputRequired
+        onCancel={() => {
+          if (bulkBusy) return;
+          setBulkRejectOpen(false);
+          setBulkRejectReason("");
+        }}
+        onConfirm={() => {
+          void runBulkReview("Rejected", bulkRejectReason.trim());
+        }}
+      />
     </div>
   );
 }

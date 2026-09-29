@@ -66,6 +66,8 @@ type PendingSalaryRevision = {
 
 type HistoryTableRow = {
   id: string;
+  sheetRow: number;
+  employeeSheetRow: number;
   employee: string;
   totalSalary: string;
   effectiveFrom: string;
@@ -75,6 +77,11 @@ type HistoryTableRow = {
   professionalTax: string;
   lwf: string;
   status: string;
+  rawEffectiveFrom: string;
+  basic: number;
+  loyaltyBonus: number;
+  professionalTaxAmount: number;
+  lwfAmount: number;
 };
 
 function formatInr(amount: number): string {
@@ -183,6 +190,11 @@ export default function SalarySlipsPage() {
   const [pendingDelete, setPendingDelete] = useState<SalarySlipRow | null>(null);
   const [deletingSlip, setDeletingSlip] = useState(false);
   const [pendingRevision, setPendingRevision] = useState<PendingSalaryRevision | null>(null);
+  const [editingHistorySheetRow, setEditingHistorySheetRow] = useState<number | null>(null);
+  const [pendingHistoryDelete, setPendingHistoryDelete] = useState<SalaryHistoryRecord | null>(
+    null,
+  );
+  const [deletingHistory, setDeletingHistory] = useState(false);
 
   const periods = useMemo(() => buildFullMonthYearPeriodOptions(), []);
 
@@ -388,6 +400,8 @@ export default function SalarySlipsPage() {
 
       return {
         id: `${record.sheetRow}-${record.employeeSheetRow}-${record.effectiveFrom}-${index}`,
+        sheetRow: record.sheetRow,
+        employeeSheetRow: record.employeeSheetRow,
         employee,
         totalSalary: formatInr(historyTotalSalary(record)),
         effectiveFrom: formatDate(record.effectiveFrom),
@@ -397,6 +411,11 @@ export default function SalarySlipsPage() {
         professionalTax: formatInr(record.professionalTax),
         lwf: formatInr(record.lwf),
         status: salaryHistoryDisplayStatus(record),
+        rawEffectiveFrom: String(record.effectiveFrom ?? "").slice(0, 10),
+        basic: Number(record.basic || 0),
+        loyaltyBonus: Number(record.loyaltyBonus || 0),
+        professionalTaxAmount: Number(record.professionalTax || 0),
+        lwfAmount: Number(record.lwf || 0),
       };
     });
   }, [filteredHistoryRecords, employees]);
@@ -416,8 +435,48 @@ export default function SalarySlipsPage() {
         header: "Status",
         render: (row) => <Badge variant={statusVariant(row.status)}>{row.status}</Badge>,
       },
+      {
+        key: "actions",
+        header: "Actions",
+        sticky: "right",
+        render: (row) => (
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || deletingHistory}
+              onClick={() => {
+                setEditingHistorySheetRow(row.sheetRow);
+                setHistoryEmployeeSheetRow(String(row.employeeSheetRow));
+                setEffectiveFrom(row.rawEffectiveFrom);
+                setBasic(String(row.basic));
+                setLoyaltyBonus(String(row.loyaltyBonus || 10));
+                setProfessionalTax(String(row.professionalTaxAmount || 200));
+                setLwf(String(row.lwfAmount || 6));
+                if (typeof window !== "undefined") {
+                  window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+                }
+              }}
+            >
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-red-600"
+              disabled={busy || deletingHistory}
+              onClick={() => {
+                const record = historyRecords.find((item) => item.sheetRow === row.sheetRow);
+                if (record) setPendingHistoryDelete(record);
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        ),
+      },
     ],
-    [],
+    [busy, deletingHistory, historyRecords],
   );
 
   const generateSlips = async () => {
@@ -470,6 +529,7 @@ export default function SalarySlipsPage() {
         success?: boolean;
         message?: string;
         generated?: unknown[];
+        skipped?: Array<{ employeeName?: string; reason?: string }>;
         [key: string]: unknown;
       }>(res, "action");
       if (!data.success) {
@@ -477,9 +537,21 @@ export default function SalarySlipsPage() {
       }
       const count = Array.isArray(data.generated) ? data.generated.length : 0;
       if (count === 0) {
+        const skipReasons = Array.isArray(data.skipped)
+          ? data.skipped
+              .map((item) => {
+                const name = String(item.employeeName ?? "Employee").trim();
+                const reason = String(item.reason ?? "").trim();
+                return reason ? `${name}: ${reason}` : "";
+              })
+              .filter(Boolean)
+          : [];
         pushToast({
           title: "No slips generated",
-          body: "Employees may already have a slip for this month, or lack effective salary for the period.",
+          body:
+            skipReasons.length > 0
+              ? skipReasons.slice(0, 3).join(" · ")
+              : "Employees may already have a slip for this month, or lack effective salary for the period.",
           variant: "error",
         });
       } else {
@@ -541,6 +613,19 @@ export default function SalarySlipsPage() {
       return;
     }
 
+    // Editing an existing period updates in place — no replace confirmation.
+    if (editingHistorySheetRow != null) {
+      await submitSalaryHistory({
+        selectedRow,
+        employeeName: employees.find((e) => e.sheetRow === historyEmployeeSheetRow)?.name,
+        effectiveFrom,
+        basicAmount,
+        lwfAmount,
+        sheetRow: editingHistorySheetRow,
+      });
+      return;
+    }
+
     const employeeLabel =
       employees.find((e) => e.sheetRow === historyEmployeeSheetRow)?.name ?? "This employee";
 
@@ -581,14 +666,17 @@ export default function SalarySlipsPage() {
     effectiveFrom: string;
     basicAmount: number;
     lwfAmount: number;
+    sheetRow?: number;
   }) => {
     setBusy(true);
     try {
+      const isEdit = payload.sheetRow != null;
       const res = await fetch("/api/salary-history", {
-        method: "POST",
+        method: isEdit ? "PATCH" : "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(isEdit ? { sheetRow: payload.sheetRow } : {}),
           employeeSheetRow: payload.selectedRow,
           employeeName: payload.employeeName,
           effectiveFrom: payload.effectiveFrom,
@@ -606,12 +694,19 @@ export default function SalarySlipsPage() {
         [key: string]: unknown;
       }>(res, "action");
       if (!data.success) {
-        throw new Error(toUserFacingActionError(data.message ?? "Failed to save salary history"));
+        throw new Error(
+          toUserFacingActionError(
+            data.message ?? (isEdit ? "Failed to update salary history" : "Failed to save salary history"),
+          ),
+        );
       }
       setPendingRevision(null);
+      setEditingHistorySheetRow(null);
       pushToast({
-        title: "Salary revision saved",
-        body: "Salary history was updated successfully.",
+        title: isEdit ? "Salary revision updated" : "Salary revision saved",
+        body: isEdit
+          ? "Effective salary period was updated successfully."
+          : "Salary history was updated successfully.",
         variant: "success",
       });
       setEmployees((prev) =>
@@ -676,6 +771,45 @@ export default function SalarySlipsPage() {
       });
     } finally {
       setDeletingSlip(false);
+    }
+  };
+
+  const deleteHistoryRecord = async (record: SalaryHistoryRecord) => {
+    setDeletingHistory(true);
+    try {
+      const res = await fetch(
+        `/api/salary-history?sheetRow=${encodeURIComponent(String(record.sheetRow))}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
+      );
+      const data = await readResponseJson<{
+        success?: boolean;
+        message?: string;
+      }>(res, "action");
+      if (!data.success) {
+        throw new Error(toUserFacingActionError(data.message ?? "Failed to delete salary history"));
+      }
+      if (editingHistorySheetRow === record.sheetRow) {
+        setEditingHistorySheetRow(null);
+        setEffectiveFrom("");
+      }
+      setPendingHistoryDelete(null);
+      pushToast({
+        title: "Effective salary deleted",
+        body: "The salary history period was removed.",
+        variant: "success",
+      });
+      await loadHistory();
+    } catch (error) {
+      pushToast({
+        title: "Delete failed",
+        body: toUserFacingActionError(error),
+        variant: "error",
+      });
+    } finally {
+      setDeletingHistory(false);
     }
   };
 
@@ -775,11 +909,15 @@ export default function SalarySlipsPage() {
         <Card>
           <CardContent className="space-y-4 p-4">
             <div className="space-y-1">
-              <h3 className="text-sm font-semibold">Salary History (Effective Dated)</h3>
+              <h3 className="text-sm font-semibold">
+                {editingHistorySheetRow
+                  ? "Edit Salary History (Effective Dated)"
+                  : "Salary History (Effective Dated)"}
+              </h3>
               <p className="text-ex-muted text-xs">
-                All employees&apos; effective salary periods are listed below. Select an employee to
-                filter that list and to add a new revision (replaces their current effective
-                salary).
+                {editingHistorySheetRow
+                  ? "Update the selected effective salary period, then save changes."
+                  : "All employees' effective salary periods are listed below. Select an employee to filter that list and to add a new revision (replaces their current effective salary)."}
               </p>
             </div>
 
@@ -793,8 +931,10 @@ export default function SalarySlipsPage() {
                   onChange={(e) => {
                     const sheetRow = e.target.value;
                     setHistoryEmployeeSheetRow(sheetRow);
+                    setEditingHistorySheetRow(null);
                     const employee = employees.find((item) => item.sheetRow === sheetRow);
                     setBasic(employee?.salary ?? "");
+                    setEffectiveFrom("");
                   }}
                 >
                   <option value="">All</option>
@@ -865,12 +1005,38 @@ export default function SalarySlipsPage() {
                 />
               </div>
             </div>
-            <Button
-              onClick={() => void addSalaryHistory()}
-              disabled={busy || !historyEmployeeSheetRow || !effectiveFrom || !basic || !lwf}
-            >
-              Save salary revision
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => void addSalaryHistory()}
+                disabled={busy || !historyEmployeeSheetRow || !effectiveFrom || !basic || !lwf}
+              >
+                {busy
+                  ? "Saving…"
+                  : editingHistorySheetRow
+                    ? "Update salary revision"
+                    : "Save salary revision"}
+              </Button>
+              {editingHistorySheetRow != null ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => {
+                    setEditingHistorySheetRow(null);
+                    setEffectiveFrom("");
+                    const employee = employees.find(
+                      (item) => item.sheetRow === historyEmployeeSheetRow,
+                    );
+                    setBasic(employee?.salary ?? "");
+                    setLoyaltyBonus("10");
+                    setProfessionalTax("200");
+                    setLwf("6");
+                  }}
+                >
+                  Cancel edit
+                </Button>
+              ) : null}
+            </div>
 
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between gap-3">
@@ -966,6 +1132,40 @@ export default function SalarySlipsPage() {
         }}
         onConfirm={() => {
           if (pendingDelete) void deleteSlip(pendingDelete);
+        }}
+        icon={<Trash2 className="size-5 text-white" aria-hidden />}
+      />
+
+      <ConfirmationDialog
+        open={Boolean(pendingHistoryDelete)}
+        title="Delete effective salary?"
+        description={
+          pendingHistoryDelete ? (
+            <>
+              Remove the effective salary period{" "}
+              <span className="text-ex-primary font-medium">
+                {formatDate(pendingHistoryDelete.effectiveFrom)} →{" "}
+                {formatDate(pendingHistoryDelete.effectiveTo)}
+              </span>{" "}
+              for{" "}
+              <span className="text-ex-primary font-medium">
+                {pendingHistoryDelete.employeeName ||
+                  `Employee #${pendingHistoryDelete.employeeSheetRow}`}
+              </span>
+              ? Generated salary slips for past months are not deleted.
+            </>
+          ) : (
+            ""
+          )
+        }
+        confirmText="Delete"
+        busy={deletingHistory}
+        busyText="Deleting…"
+        onCancel={() => {
+          if (!deletingHistory) setPendingHistoryDelete(null);
+        }}
+        onConfirm={() => {
+          if (pendingHistoryDelete) void deleteHistoryRecord(pendingHistoryDelete);
         }}
         icon={<Trash2 className="size-5 text-white" aria-hidden />}
       />

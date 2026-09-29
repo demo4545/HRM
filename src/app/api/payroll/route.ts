@@ -14,10 +14,10 @@ import {
   resolveAttendanceSpreadsheetIdForRow,
 } from "@/lib/attendance/employee";
 import { sheetRowToForm } from "@/lib/employee";
+import { listAllEmployeeRows } from "@/lib/employees/repository";
 import { listCompanyHolidays } from "@/lib/company-holidays/repository";
 import { listLeaveApplications } from "@/lib/attendance/leave-approvals";
 import { LEAVE_STATUS } from "@/lib/attendance/leave-status";
-import { EMPLOYEE_SHEET_RANGE, readSheet } from "@/lib/google/sheets";
 import { formatGoogleApiClientMessage } from "@/lib/google/drive-auth";
 import {
   aggregatePayroll,
@@ -58,9 +58,9 @@ export const GET = withActiveSession(async (req, user) => {
       return NextResponse.json({ success: false, message: "Invalid month" }, { status: 400 });
     }
 
-    const [employeeSheet, holidays, salaryHistory, advanceDeductions, overtimeRequests] =
+    const [employeeRecords, holidays, salaryHistory, advanceDeductions, overtimeRequests] =
       await Promise.all([
-        readSheet(EMPLOYEE_SHEET_RANGE),
+        listAllEmployeeRows(),
         listCompanyHolidays(year),
         listSalaryHistoryRecords(),
         mapSalaryAdvanceDeductionsForPeriod(year, month),
@@ -70,7 +70,7 @@ export const GET = withActiveSession(async (req, user) => {
         }),
       ]);
 
-    if (!employeeSheet.length) {
+    if (!employeeRecords.length) {
       return NextResponse.json({
         success: true,
         period: { year, month, workingDays: 0, scheduledDates: [] },
@@ -87,7 +87,6 @@ export const GET = withActiveSession(async (req, user) => {
       });
     }
 
-    const headers = employeeSheet[0] as string[];
     const scheduledDates = listScheduledWorkingDates(year, month, holidays);
     const workingDays = scheduledDates.length;
     const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -105,9 +104,10 @@ export const GET = withActiveSession(async (req, user) => {
 
     const payableRows: ReturnType<typeof calculateEmployeePayroll>[] = [];
 
-    for (let i = 1; i < employeeSheet.length; i += 1) {
-      const sheetRow = i + 1;
-      const row = employeeSheet[i] ?? [];
+    for (const record of employeeRecords) {
+      const sheetRow = record.sheetRow;
+      const headers = record.headers;
+      const row = record.row;
       const form = sheetRowToForm(headers, row);
       if (!form.name.trim()) continue;
 

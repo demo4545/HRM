@@ -513,6 +513,119 @@ export async function createSalaryHistoryRecord(input: {
   }
 }
 
+export async function updateSalaryHistoryRecord(
+  sheetRow: number,
+  input: {
+    employeeSheetRow: number;
+    employeeName?: string;
+    effectiveFrom: string;
+    effectiveTo?: string;
+    basic: number;
+    hra?: number;
+    organizationAllowance?: number;
+    lwf?: number;
+    loyaltyBonus: number;
+    professionalTax: number;
+    status?: "Active" | "Inactive";
+  },
+): Promise<SalaryHistoryRecord> {
+  if (!Number.isInteger(sheetRow) || sheetRow < 2) {
+    throw new Error("Invalid salary history row");
+  }
+
+  const existing = (await listSalaryHistoryRecords({ validOnly: false })).find(
+    (row) => row.sheetRow === sheetRow,
+  );
+  if (!existing) {
+    throw new Error("Salary history record not found");
+  }
+
+  const effectiveFrom = normalizeDateOnly(input.effectiveFrom);
+  if (!effectiveFrom) {
+    throw new Error("effectiveFrom is required (YYYY-MM-DD)");
+  }
+
+  const basicAmount = Number(input.basic);
+  if (!Number.isFinite(basicAmount) || basicAmount <= 0) {
+    throw new Error("Basic salary must be greater than 0");
+  }
+
+  const effectiveTo =
+    normalizeDateOnly(input.effectiveTo ?? "") || defaultSalaryEffectiveTo(effectiveFrom);
+  const status = input.status ?? existing.status;
+
+  const updated: SalaryHistoryRecord = {
+    ...existing,
+    employeeSheetRow: input.employeeSheetRow,
+    employeeName: String(input.employeeName ?? existing.employeeName).trim(),
+    effectiveFrom,
+    effectiveTo,
+    basic: Math.round(basicAmount * 100) / 100,
+    hra: Math.round(Math.max(0, Number(input.hra) || 0) * 100) / 100,
+    organizationAllowance:
+      Math.round(Math.max(0, Number(input.organizationAllowance) || 0) * 100) / 100,
+    lwf: Number(input.lwf) > 0 ? Math.round(Number(input.lwf) * 100) / 100 : 6,
+    loyaltyBonus: Math.min(20, Math.max(0, Number(input.loyaltyBonus) || 0)),
+    professionalTax: Number(input.professionalTax) > 0 ? Number(input.professionalTax) : 200,
+    status,
+    updatedAt: nowIso(),
+  };
+
+  const siblings = (await listSalaryHistoryRecords({ validOnly: false })).filter(
+    (row) =>
+      row.employeeSheetRow === updated.employeeSheetRow &&
+      row.sheetRow !== sheetRow &&
+      isValidSalaryHistoryRecord(row),
+  );
+  assertNonOverlappingEffectiveRanges([...siblings, updated]);
+
+  await ensureHeaders(SALARY_HISTORY_SHEET_NAME, SALARY_HISTORY_HEADERS);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: sheetRowRange(SALARY_HISTORY_SHEET_NAME, sheetRow, SALARY_HISTORY_HEADERS.length),
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [historyRowValues(updated)] },
+  });
+
+  if (updated.status === "Active") {
+    const latest = await findLatestActiveSalaryForEmployee(updated.employeeSheetRow);
+    if (latest) {
+      await syncEmployeeSheetSalary({
+        employeeSheetRow: latest.employeeSheetRow,
+        basic: latest.basic,
+        effectiveFrom: latest.effectiveFrom,
+      });
+    }
+  }
+
+  return updated;
+}
+
+export async function deleteSalaryHistoryRecord(sheetRow: number): Promise<boolean> {
+  if (!Number.isInteger(sheetRow) || sheetRow < 2) {
+    throw new Error("Invalid salary history row");
+  }
+
+  const existing = (await listSalaryHistoryRecords({ validOnly: false })).find(
+    (row) => row.sheetRow === sheetRow,
+  );
+  if (!existing) return false;
+
+  const employeeSheetRow = existing.employeeSheetRow;
+  await deleteSalaryHistorySheetRows([sheetRow]);
+
+  const latest = await findLatestActiveSalaryForEmployee(employeeSheetRow);
+  if (latest) {
+    await syncEmployeeSheetSalary({
+      employeeSheetRow: latest.employeeSheetRow,
+      basic: latest.basic,
+      effectiveFrom: latest.effectiveFrom,
+    });
+  }
+
+  return true;
+}
+
 export async function findEffectiveSalaryForPeriod(args: {
   employeeSheetRow: number;
   periodStart: string;
