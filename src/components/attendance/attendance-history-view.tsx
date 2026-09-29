@@ -145,8 +145,6 @@ export function AttendanceHistoryView({
   rows,
   loading,
   importing,
-  error,
-  importMessage,
   onImportClick,
   onExport,
   canExport,
@@ -174,8 +172,6 @@ export function AttendanceHistoryView({
   rows: AttendanceHistoryRow[];
   loading: boolean;
   importing: boolean;
-  error: string | null;
-  importMessage: string | null;
   onImportClick: () => void;
   onExport: () => void;
   canExport: boolean;
@@ -404,12 +400,6 @@ export function AttendanceHistoryView({
         </div>
       </div>
 
-      {importMessage ? (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-          {importMessage}
-        </p>
-      ) : null}
-
       {isHr && hrFormMode !== "closed" && onSaveHrAttendance ? (
         <HrAttendanceForm
           key={`${hrFormMode}-${hrFormRow?.id ?? hrFormDate ?? "new"}`}
@@ -424,12 +414,6 @@ export function AttendanceHistoryView({
           onSubmit={onSaveHrAttendance}
           onCancel={onCloseHrForm}
         />
-      ) : null}
-
-      {error ? (
-        <p className="border-ex-banner-danger-border bg-ex-banner-danger-bg text-ex-banner-danger-fg rounded-xl border px-4 py-3 text-sm">
-          {error}
-        </p>
       ) : null}
 
       {!loading && rows.length > 0 ? (

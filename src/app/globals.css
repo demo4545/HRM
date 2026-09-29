@@ -53,6 +53,11 @@
   --ex-chart-3: #c27803;
   --ex-chart-4: #6366f1;
   --ex-chart-5: #94a3b8;
+  --ex-chart-6: #7c3aed;
+  --ex-chart-7: #0284c7;
+  --ex-chart-8: #e11d48;
+  --ex-chart-9: #db2777;
+  --ex-chart-10: #ea580c;
 }
 
 .dark {
@@ -102,6 +107,11 @@
   --ex-chart-3: #fbbf24;
   --ex-chart-4: #818cf8;
   --ex-chart-5: #64748b;
+  --ex-chart-6: #a78bfa;
+  --ex-chart-7: #38bdf8;
+  --ex-chart-8: #fb7185;
+  --ex-chart-9: #f472b6;
+  --ex-chart-10: #fb923c;
 }
 
 @theme inline {
@@ -145,6 +155,11 @@
   --color-ex-chart-3: var(--ex-chart-3);
   --color-ex-chart-4: var(--ex-chart-4);
   --color-ex-chart-5: var(--ex-chart-5);
+  --color-ex-chart-6: var(--ex-chart-6);
+  --color-ex-chart-7: var(--ex-chart-7);
+  --color-ex-chart-8: var(--ex-chart-8);
+  --color-ex-chart-9: var(--ex-chart-9);
+  --color-ex-chart-10: var(--ex-chart-10);
   --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;

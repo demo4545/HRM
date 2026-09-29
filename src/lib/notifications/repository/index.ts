@@ -6,8 +6,10 @@ import {
   createNotificationFirestore,
   createNotificationsFirestore,
   countUnreadNotificationsFirestore,
+  deleteNotificationsByDedupePrefixFirestore,
   listNotificationsForRecipientFirestore,
   markNotificationReadFirestore,
+  updateNotificationsByDedupePrefixFirestore,
 } from "./firestore";
 
 export type { CreateNotificationInput };
@@ -57,4 +59,25 @@ export async function countUnreadNotifications(recipientSheetRow: number): Promi
   }
   const { countUnreadNotifications: countSheets } = await import("../sheets");
   return countSheets(recipientSheetRow);
+}
+
+export async function updateNotificationsByDedupePrefix(params: {
+  dedupePrefix: string;
+  title: string;
+  body: string;
+  markUnread?: boolean;
+}): Promise<number> {
+  if (isFirebaseDailyStorage()) {
+    return updateNotificationsByDedupePrefixFirestore(params);
+  }
+  const { updateNotificationsByDedupePrefix: updateSheets } = await import("../sheets");
+  return updateSheets(params);
+}
+
+export async function deleteNotificationsByDedupePrefix(dedupePrefix: string): Promise<number> {
+  if (isFirebaseDailyStorage()) {
+    return deleteNotificationsByDedupePrefixFirestore(dedupePrefix);
+  }
+  const { deleteNotificationsByDedupePrefix: deleteSheets } = await import("../sheets");
+  return deleteSheets(dedupePrefix);
 }

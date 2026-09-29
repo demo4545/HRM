@@ -194,3 +194,112 @@ export async function createAnnouncement(input: {
 
   return record;
 }
+
+async function getAnnouncementsSheetId(): Promise<number> {
+  const metadata = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties",
+  });
+  const sheet = metadata.data.sheets?.find((entry) => entry.properties?.title === SHEET_NAME);
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId == null) {
+    throw new Error(`Sheet "${SHEET_NAME}" not found`);
+  }
+  return sheetId;
+}
+
+/** 1-based sheet row for an announcement id, or null when missing. */
+async function findAnnouncementSheetRow(id: string): Promise<{
+  sheetRow: number;
+  record: AnnouncementRecord;
+} | null> {
+  await ensureSheet();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${SHEET_RANGE}!A2:I`,
+  });
+  const rows = (response.data.values as string[][] | undefined) ?? [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const record = rowToAnnouncement(rows[index] ?? []);
+    if (!record || record.id !== id) continue;
+    return { sheetRow: index + 2, record };
+  }
+  return null;
+}
+
+export async function updateAnnouncement(
+  id: string,
+  input: {
+    title: string;
+    message: string;
+    category: AnnouncementCategory;
+    expiresAt: string;
+  },
+): Promise<AnnouncementRecord> {
+  const found = await findAnnouncementSheetRow(id);
+  if (!found) {
+    throw new Error("Announcement not found");
+  }
+
+  const expiresAt = normalizeExpiresAt(input.expiresAt);
+  if (!expiresAt) {
+    throw new Error("A valid expiry date (YYYY-MM-DD) is required");
+  }
+
+  const updated: AnnouncementRecord = {
+    ...found.record,
+    title: input.title,
+    message: input.message,
+    category: input.category,
+    expiresAt,
+  };
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${SHEET_RANGE}!A${found.sheetRow}:I${found.sheetRow}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [
+        [
+          updated.id,
+          updated.title,
+          updated.message,
+          updated.category,
+          updated.authorSheetRow,
+          updated.authorName,
+          updated.recipientCount,
+          updated.createdAt,
+          updated.expiresAt,
+        ],
+      ],
+    },
+  });
+
+  return updated;
+}
+
+export async function deleteAnnouncement(id: string): Promise<boolean> {
+  const found = await findAnnouncementSheetRow(id);
+  if (!found) return false;
+
+  const sheetId = await getAnnouncementsSheetId();
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: found.sheetRow - 1,
+              endIndex: found.sheetRow,
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  return true;
+}

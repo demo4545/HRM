@@ -7,11 +7,14 @@ import { getCompanyBranding } from "@/lib/branding";
 import { formatGoogleApiClientMessage } from "@/lib/google/drive-auth";
 import { formatEmployeePositionLabel, headerToFormKey, sheetRowToForm } from "@/lib/employee";
 import {
+  getEmployeeBySheetRow,
+  listAllEmployeeRows,
+} from "@/lib/employees/repository";
+import {
   getOrCreateSalarySlipsYearFolder,
   trashDriveFile,
   uploadBinaryFileToFolder,
 } from "@/lib/google/drive";
-import { EMPLOYEE_SHEET_RANGE, readSheet } from "@/lib/google/sheets";
 import { amountToIndianWords, calculateSalaryBreakdown } from "@/lib/salary-slips/calculation";
 import { renderSalarySlipPdf } from "@/lib/salary-slips/pdf";
 import { OVERTIME_APPROVAL, OVERTIME_REQUEST_STATUS } from "@/lib/attendance/constants";
@@ -151,11 +154,21 @@ export const POST = withActiveSession(async (req, user) => {
       );
     }
 
-    const employeeSheet = await readSheet(EMPLOYEE_SHEET_RANGE);
-    if (employeeSheet.length < 2) {
+    // Same roster as salary history / All Employees (Firebase when DAILY_DATA_STORAGE=firebase).
+    const employeeRecords = targetSheetRow
+      ? await (async () => {
+          const one = await getEmployeeBySheetRow(targetSheetRow);
+          return one ? [one] : [];
+        })()
+      : await listAllEmployeeRows();
+
+    if (targetSheetRow && employeeRecords.length === 0) {
+      return NextResponse.json({ success: false, message: "Employee not found" }, { status: 404 });
+    }
+    if (employeeRecords.length === 0) {
       return NextResponse.json({ success: false, message: "No employees found" }, { status: 400 });
     }
-    const headers = employeeSheet[0] as string[];
+
     const [allSlips, salaryHistory, holidays, overtimeRequests] = await Promise.all([
       listSalarySlips(),
       listSalaryHistoryRecords(),
@@ -172,12 +185,23 @@ export const POST = withActiveSession(async (req, user) => {
     const periodEnd = `${year}-${String(month).padStart(2, "0")}-${String(getDaysInMonth(year, month)).padStart(2, "0")}`;
 
     const generated: Array<{ employeeSheetRow: number; slipId: string; fileName: string }> = [];
-    for (let i = 1; i < employeeSheet.length; i += 1) {
-      const sheetRow = i + 1;
-      if (targetSheetRow && targetSheetRow !== sheetRow) continue;
-      const row = employeeSheet[i] ?? [];
+    const skipped: Array<{ employeeSheetRow: number; employeeName: string; reason: string }> = [];
+
+    for (const record of employeeRecords) {
+      const sheetRow = record.sheetRow;
+      const headers = record.headers;
+      const row = record.row;
       const form = sheetRowToForm(headers, row);
-      if (form.status.toLowerCase() !== "active") continue;
+      const employeeName = form.name.trim() || `Row ${sheetRow}`;
+
+      if (form.status.toLowerCase() !== "active") {
+        skipped.push({
+          employeeSheetRow: sheetRow,
+          employeeName,
+          reason: "Employee status is not Active",
+        });
+        continue;
+      }
       // Super Admin is not paid via salary slips.
       if (isSuperAdminRole(form.role)) {
         if (targetSheetRow === sheetRow) {
@@ -186,6 +210,11 @@ export const POST = withActiveSession(async (req, user) => {
             { status: 400 },
           );
         }
+        skipped.push({
+          employeeSheetRow: sheetRow,
+          employeeName,
+          reason: "Super Admin is not paid via salary slips",
+        });
         continue;
       }
 
@@ -197,6 +226,11 @@ export const POST = withActiveSession(async (req, user) => {
           s.status !== "Deleted",
       );
       if (existing && !overrideExisting) {
+        skipped.push({
+          employeeSheetRow: sheetRow,
+          employeeName,
+          reason: "A salary slip already exists for this month",
+        });
         continue;
       }
 
@@ -205,7 +239,14 @@ export const POST = withActiveSession(async (req, user) => {
         periodStart,
         periodEnd,
       });
-      if (!history) continue;
+      if (!history) {
+        skipped.push({
+          employeeSheetRow: sheetRow,
+          employeeName,
+          reason: "No effective salary covers this period",
+        });
+        continue;
+      }
 
       const attendanceByDate = new Map();
       let attendanceSpreadsheetId =
@@ -436,7 +477,7 @@ export const POST = withActiveSession(async (req, user) => {
       generated.push({ employeeSheetRow: sheetRow, slipId, fileName: uploaded.fileName });
     }
 
-    return NextResponse.json({ success: true, generated });
+    return NextResponse.json({ success: true, generated, skipped });
   } catch (error: unknown) {
     const message = formatGoogleApiClientMessage(error, {
       forHrAdmin: true,

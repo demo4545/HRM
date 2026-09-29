@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AttendanceHistoryView } from "@/components/attendance/attendance-history-view";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useAuth } from "@/contexts/auth-provider";
+import { useNotifications } from "@/contexts/notifications-provider";
 import {
   fetchAttendanceHistory,
   importAttendanceCsv,
@@ -92,6 +93,7 @@ function exportCsv(
 
 export default function AttendanceHistoryPage() {
   const { user } = useAuth();
+  const { pushToast } = useNotifications();
   const isHr = user ? canManageEmployees(user.role) : false;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -108,8 +110,6 @@ export default function AttendanceHistoryPage() {
   const [requestingOvertimeId, setRequestingOvertimeId] = useState<string | null>(null);
   const [pendingOvertimeRow, setPendingOvertimeRow] = useState<AttendanceHistoryRow | null>(null);
   const [overtimeNote, setOvertimeNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [importMessage, setImportMessage] = useState<string | null>(null);
   const [hrFormMode, setHrFormMode] = useState<"closed" | "add" | "edit">("closed");
   const [hrFormRow, setHrFormRow] = useState<AttendanceHistoryRow | null>(null);
   const [savingHrAttendance, setSavingHrAttendance] = useState(false);
@@ -146,16 +146,19 @@ export default function AttendanceHistoryPage() {
   const loadHistory = useCallback(async () => {
     if (year == null || month == null || targetSheetRow == null) return;
     setLoading(true);
-    setError(null);
     try {
       const data = await fetchAttendanceHistory(year, month, targetSheetRow);
       setRows(data);
     } catch (err) {
-      setError(toUserFacingFetchError(err));
+      pushToast({
+        title: "Couldn’t load attendance",
+        body: toUserFacingFetchError(err),
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }, [year, month, targetSheetRow]);
+  }, [year, month, targetSheetRow, pushToast]);
 
   useEffect(() => {
     if (year == null || month == null || targetSheetRow == null) return;
@@ -163,7 +166,6 @@ export default function AttendanceHistoryPage() {
     let cancelled = false;
     void (async () => {
       setLoading(true);
-      setError(null);
       try {
         const data = await fetchAttendanceHistory(year, month, targetSheetRow);
         if (!cancelled) {
@@ -171,7 +173,11 @@ export default function AttendanceHistoryPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(toUserFacingFetchError(err));
+          pushToast({
+            title: "Couldn’t load attendance",
+            body: toUserFacingFetchError(err),
+            variant: "error",
+          });
           setRows([]);
         }
       } finally {
@@ -182,7 +188,7 @@ export default function AttendanceHistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [year, month, targetSheetRow]);
+  }, [year, month, targetSheetRow, pushToast]);
 
   const sortedRows = useMemo(() => [...rows].sort((a, b) => b.date.localeCompare(a.date)), [rows]);
   const selectedEmployee = useMemo(
@@ -193,8 +199,6 @@ export default function AttendanceHistoryPage() {
   async function handleImportFile(file: File) {
     if (targetSheetRow == null) return;
     setImporting(true);
-    setImportMessage(null);
-    setError(null);
     try {
       const result = await importAttendanceCsv(file, targetSheetRow);
       const extra =
@@ -205,12 +209,20 @@ export default function AttendanceHistoryPage() {
         result.employee?.employeeName ??
         selectedEmployee?.name ??
         (isHr ? `sheet row ${targetSheetRow}` : "your account");
-      setImportMessage(`${result.message}${extra} For: ${employeeLabel}.`);
+      pushToast({
+        title: "Import complete",
+        body: `${result.message}${extra} For: ${employeeLabel}.`,
+        variant: "success",
+      });
       if (year != null && month != null) {
         await loadHistory();
       }
     } catch (err) {
-      setError(toUserFacingActionError(err));
+      pushToast({
+        title: "Import failed",
+        body: toUserFacingActionError(err),
+        variant: "error",
+      });
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -229,20 +241,26 @@ export default function AttendanceHistoryPage() {
 
   async function handleRequestOvertime(row: AttendanceHistoryRow, comment: string) {
     setRequestingOvertimeId(row.id);
-    setError(null);
-    setImportMessage(null);
     try {
       await submitOvertimeRequest({
         date: row.date,
         comment,
         ...(isHr && targetSheetRow != null ? { employeeSheetRow: targetSheetRow } : {}),
       });
-      setImportMessage(`Overtime request submitted for ${row.date}.`);
+      pushToast({
+        title: "Overtime request submitted",
+        body: `Request sent for ${row.date}.`,
+        variant: "success",
+      });
       setPendingOvertimeRow(null);
       setOvertimeNote("");
       await loadHistory();
     } catch (err) {
-      setError(toUserFacingActionError(err));
+      pushToast({
+        title: "Overtime request failed",
+        body: toUserFacingActionError(err),
+        variant: "error",
+      });
     } finally {
       setRequestingOvertimeId(null);
     }
@@ -260,11 +278,14 @@ export default function AttendanceHistoryPage() {
 
   async function handleSaveHrAttendance(values: HrAttendanceFormValues) {
     if (targetSheetRow == null) {
-      throw new Error("Select an employee first");
+      pushToast({
+        title: "Select an employee",
+        body: "Choose an employee before saving attendance.",
+        variant: "error",
+      });
+      return;
     }
     setSavingHrAttendance(true);
-    setError(null);
-    setImportMessage(null);
     try {
       const result = await saveHrAttendance({
         employeeSheetRow: targetSheetRow,
@@ -275,12 +296,22 @@ export default function AttendanceHistoryPage() {
         breakStart: values.breakStart || undefined,
         breakEnd: values.breakEnd || undefined,
       });
-      setImportMessage(result.message);
+      pushToast({
+        title: "Attendance saved",
+        body: result.message,
+        variant: "success",
+      });
       setHrFormMode("closed");
       setHrFormRow(null);
       if (year != null && month != null) {
         await loadHistory();
       }
+    } catch (err) {
+      pushToast({
+        title: "Couldn’t save attendance",
+        body: toUserFacingActionError(err),
+        variant: "error",
+      });
     } finally {
       setSavingHrAttendance(false);
     }
@@ -313,8 +344,6 @@ export default function AttendanceHistoryPage() {
         rows={rows}
         loading={loading}
         importing={importing}
-        error={error}
-        importMessage={importMessage}
         onImportClick={() => fileInputRef.current?.click()}
         onExport={() =>
           exportCsv(sortedRows, {
@@ -327,7 +356,6 @@ export default function AttendanceHistoryPage() {
         canExport={rows.length > 0}
         requestingOvertimeId={requestingOvertimeId}
         onRequestOvertime={(row) => {
-          setError(null);
           setOvertimeNote("");
           setPendingOvertimeRow(row);
         }}

@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useNotifications } from "@/contexts/notifications-provider";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { localTodayIso } from "@/lib/attendance/manual-entry";
@@ -68,9 +69,12 @@ export default function AnnouncementsPage() {
   const [message, setMessage] = useState("");
   const [category, setCategory] = useState<AnnouncementCategory>("general");
   const [expiresAt, setExpiresAt] = useState(localTodayIso());
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<AnnouncementRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,7 +111,30 @@ export default function AnnouncementsPage() {
     };
   }, [pushToast]);
 
-  const publishAnnouncement = async () => {
+  function resetComposeForm() {
+    setEditingId(null);
+    setTitle("");
+    setMessage("");
+    setCategory("general");
+    setExpiresAt(localTodayIso());
+  }
+
+  function startEdit(announcement: AnnouncementRecord) {
+    setEditingId(announcement.id);
+    setTitle(announcement.title);
+    setMessage(announcement.message);
+    setCategory(announcement.category);
+    setExpiresAt(
+      String(announcement.expiresAt ?? "")
+        .trim()
+        .slice(0, 10) || localTodayIso(),
+    );
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  const saveAnnouncement = async () => {
     if (!title.trim() || !message.trim()) {
       pushToast({
         title: "Missing details",
@@ -127,11 +154,13 @@ export default function AnnouncementsPage() {
 
     setPublishing(true);
     try {
+      const isEdit = Boolean(editingId);
       const response = await fetch("/api/announcements", {
-        method: "POST",
+        method: isEdit ? "PATCH" : "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(isEdit ? { id: editingId } : {}),
           title: title.trim(),
           message: message.trim(),
           category,
@@ -145,23 +174,33 @@ export default function AnnouncementsPage() {
       }>(response, "action");
 
       if (!response.ok || !data.success || !data.announcement) {
-        throw new Error(data.message ?? "Failed to publish announcement");
+        throw new Error(
+          data.message ?? (isEdit ? "Failed to update announcement" : "Failed to publish announcement"),
+        );
       }
 
-      setAnnouncements((current) => [data.announcement!, ...current]);
-      setTitle("");
-      setMessage("");
-      setCategory("general");
-      setExpiresAt(localTodayIso());
+      if (isEdit) {
+        setAnnouncements((current) =>
+          current.map((row) => (row.id === data.announcement!.id ? data.announcement! : row)),
+        );
+        pushToast({
+          title: "Announcement updated",
+          body: "Changes are saved on the dashboard and in employee notifications.",
+          variant: "success",
+        });
+      } else {
+        setAnnouncements((current) => [data.announcement!, ...current]);
+        pushToast({
+          title: "Announcement published",
+          body: `Sent to ${data.announcement.recipientCount} active employee${data.announcement.recipientCount === 1 ? "" : "s"}.`,
+          variant: "success",
+        });
+      }
+      resetComposeForm();
+    } catch (saveError) {
       pushToast({
-        title: "Announcement published",
-        body: `Sent to ${data.announcement.recipientCount} active employee${data.announcement.recipientCount === 1 ? "" : "s"}.`,
-        variant: "success",
-      });
-    } catch (publishError) {
-      pushToast({
-        title: "Publish failed",
-        body: toUserFacingActionError(publishError),
+        title: editingId ? "Update failed" : "Publish failed",
+        body: toUserFacingActionError(saveError),
         variant: "error",
       });
     } finally {
@@ -169,16 +208,56 @@ export default function AnnouncementsPage() {
     }
   };
 
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      const response = await fetch(
+        `/api/announcements?id=${encodeURIComponent(pendingDelete.id)}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
+      );
+      const data = await readResponseJson<{ success?: boolean; message?: string }>(
+        response,
+        "action",
+      );
+      if (!response.ok || !data.success) {
+        throw new Error(data.message ?? "Failed to delete announcement");
+      }
+
+      setAnnouncements((current) => current.filter((row) => row.id !== pendingDelete.id));
+      if (editingId === pendingDelete.id) {
+        resetComposeForm();
+      }
+      pushToast({
+        title: "Announcement deleted",
+        body: `"${pendingDelete.title}" was removed.`,
+        variant: "success",
+      });
+      setPendingDelete(null);
+    } catch (deleteError) {
+      pushToast({
+        title: "Delete failed",
+        body: toUserFacingActionError(deleteError),
+        variant: "error",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="Notice / Announcement"
-        description="Publish office leave notices and general messages to all active employees."
+        description="Publish, edit, or delete office leave notices and general messages. Only HR and Super Admin can manage announcements."
       />
 
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>Compose announcement</CardTitle>
+          <CardTitle>{editingId ? "Edit announcement" : "Compose announcement"}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
@@ -203,14 +282,14 @@ export default function AnnouncementsPage() {
           </div>
           <div className="space-y-2">
             <Label>Audience</Label>
-            <Input value="All active employees" disabled />
+            <Input value="All active employees (incl. HR & Super Admin)" disabled />
           </div>
           <div className="space-y-2">
             <Label>Visible until (end date)</Label>
             <Input
               type="date"
               value={expiresAt}
-              min={localTodayIso()}
+              min={editingId ? undefined : localTodayIso()}
               onChange={(event) => setExpiresAt(event.target.value)}
             />
             <p className="text-ex-muted text-xs">
@@ -231,14 +310,32 @@ export default function AnnouncementsPage() {
             />
           </div>
 
-          <Button
-            className="w-fit md:col-span-2"
-            variant="secondary"
-            disabled={publishing}
-            onClick={() => void publishAnnouncement()}
-          >
-            {publishing ? "Publishing…" : "Publish to all employees"}
-          </Button>
+          <div className="flex flex-wrap gap-2 md:col-span-2">
+            <Button
+              className="w-fit"
+              variant="secondary"
+              disabled={publishing}
+              onClick={() => void saveAnnouncement()}
+            >
+              {publishing
+                ? editingId
+                  ? "Saving…"
+                  : "Publishing…"
+                : editingId
+                  ? "Save changes"
+                  : "Publish to all employees"}
+            </Button>
+            {editingId ? (
+              <Button
+                className="w-fit"
+                variant="outline"
+                disabled={publishing}
+                onClick={() => resetComposeForm()}
+              >
+                Cancel edit
+              </Button>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 
@@ -279,10 +376,31 @@ export default function AnnouncementsPage() {
                         {formatDate(announcement.expiresAt)}
                       </p>
                     </div>
-                    <Badge variant="accent">
-                      {announcement.recipientCount} recipient
-                      {announcement.recipientCount === 1 ? "" : "s"}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="accent">
+                        {announcement.recipientCount} recipient
+                        {announcement.recipientCount === 1 ? "" : "s"}
+                      </Badge>
+                      {!isExpired(announcement.expiresAt) ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={publishing || deleting}
+                          onClick={() => startEdit(announcement)}
+                        >
+                          Edit
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600"
+                        disabled={publishing || deleting}
+                        onClick={() => setPendingDelete(announcement)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </div>
                   <p className="text-ex-primary text-sm whitespace-pre-wrap">
                     {announcement.message}
@@ -293,6 +411,33 @@ export default function AnnouncementsPage() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmationDialog
+        open={Boolean(pendingDelete)}
+        title="Delete announcement?"
+        description={
+          pendingDelete ? (
+            <>
+              Remove{" "}
+              <span className="text-ex-primary font-medium">&ldquo;{pendingDelete.title}&rdquo;</span>{" "}
+              permanently. It will no longer appear on the dashboard or in this history.
+            </>
+          ) : (
+            ""
+          )
+        }
+        confirmText="Delete"
+        confirmVariant="danger"
+        busy={deleting}
+        busyText="Deleting…"
+        onCancel={() => {
+          if (deleting) return;
+          setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          void confirmDelete();
+        }}
+      />
     </div>
   );
 }

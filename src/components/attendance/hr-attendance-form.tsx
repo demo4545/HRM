@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { useNotifications } from "@/contexts/notifications-provider";
 import {
   WORK_MODE,
   WORK_MODE_OPTIONS,
@@ -14,7 +15,6 @@ import {
 } from "@/lib/attendance/constants";
 import type { AttendanceHistoryRow } from "@/lib/attendance/client";
 import { clockToTimeInput, localTodayIso } from "@/lib/attendance/manual-entry";
-import { toUserFacingActionError } from "@/lib/api/user-facing-error";
 
 export type HrAttendanceFormValues = {
   date: string;
@@ -76,22 +76,25 @@ export function HrAttendanceForm({
   onSubmit,
   onCancel,
 }: HrAttendanceFormProps) {
+  const { pushToast } = useNotifications();
   const [form, setForm] = useState(() => buildInitialForm(initialDate, initialRow));
-  const [error, setError] = useState<string | null>(null);
   const maxDate = localTodayIso();
   const punchOptional = isPunchOptionalWorkMode(form.workMode);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     if (form.date > maxDate) {
-      setError("Future dates are not allowed. Choose today or an earlier date.");
+      pushToast({
+        title: "Invalid date",
+        body: "Future dates are not allowed. Choose today or an earlier date.",
+        variant: "error",
+      });
       return;
     }
     try {
       await onSubmit(form);
-    } catch (err) {
-      setError(toUserFacingActionError(err));
+    } catch {
+      // Parent (attendance history page) already shows a toaster for save failures.
     }
   }
 
@@ -203,8 +206,6 @@ export function HrAttendanceForm({
           ? "Punch and break times are not needed for leave or holiday. Saving marks the day as On Leave."
           : "Set punch in/out for missed punches. Break start and end must both be filled to record break time. Working hours and status are recalculated automatically when punch out is set."}
       </p>
-
-      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" disabled={submitting}>

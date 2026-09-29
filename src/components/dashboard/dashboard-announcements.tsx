@@ -171,7 +171,7 @@ export function DashboardAnnouncements({ className }: { className?: string }) {
         </Link>
       </div>
 
-      <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+      <ul className="flex min-h-0 flex-1 flex-col gap-2">
         {items.map((announcement) => {
           const message = normalizeMessage(announcement.message);
           const meta = [announcement.authorName, formatPostedAt(announcement.createdAt)]
@@ -181,22 +181,40 @@ export function DashboardAnnouncements({ className }: { className?: string }) {
           return (
             <li
               key={announcement.id}
-              className="border-ex-secondary/20 bg-ex-secondary/5 flex min-h-0 flex-1 items-start gap-2.5 rounded-lg border px-2.5 py-2.5"
+              className="border-ex-secondary/20 bg-ex-secondary/5 flex min-h-0 flex-1 flex-col rounded-lg border px-2.5 py-2.5"
             >
-              <div className="bg-ex-secondary/15 text-ex-secondary mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full">
-                <Megaphone className="size-3.5" aria-hidden />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <Badge variant={categoryVariant(announcement.category)} className="px-1.5 py-0">
-                    {categoryLabel(announcement.category)}
-                  </Badge>
-                  <p className="text-ex-primary text-sm font-semibold">{announcement.title}</p>
+              <div className="flex items-start gap-2.5">
+                <div className="bg-ex-secondary/15 text-ex-secondary mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full">
+                  <Megaphone className="size-3.5" aria-hidden />
                 </div>
-                {message ? (
-                  <p className="text-ex-muted mt-1 text-sm leading-snug">{message}</p>
-                ) : null}
-                {meta ? <p className="text-ex-muted mt-1 text-xs">{meta}</p> : null}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <Badge variant={categoryVariant(announcement.category)} className="px-1.5 py-0">
+                      {categoryLabel(announcement.category)}
+                    </Badge>
+                    <p className="text-ex-primary text-sm font-semibold">{announcement.title}</p>
+                  </div>
+                  {message ? (
+                    <div className="relative mt-1 max-h-24 overflow-hidden">
+                      <p className="text-ex-muted text-sm leading-snug whitespace-pre-wrap wrap-break-word">
+                        {message}
+                      </p>
+                      <div
+                        aria-hidden
+                        className="from-ex-secondary/5 pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t to-transparent"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+                    {meta ? <p className="text-ex-muted text-xs">{meta}</p> : <span />}
+                    <Link
+                      href={viewAllHref}
+                      className="text-ex-secondary text-xs font-medium underline-offset-2 hover:underline"
+                    >
+                      Read full notice
+                    </Link>
+                  </div>
+                </div>
               </div>
             </li>
           );
