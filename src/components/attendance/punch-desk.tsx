@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import {
   IDEAL_BREAK_HOURS,
   IDEAL_WORKING_HOURS,
-  isHalfDayUnpaidWorkMode,
+  isHalfDayWorkMode,
 } from "@/lib/attendance/constants";
 import { formatDuration, parseDurationToMs } from "@/lib/attendance/time";
 import type { TodayAttendance } from "@/lib/attendance/client";
@@ -220,7 +220,8 @@ export function PunchDesk({
   const hasPunchedIn = today?.hasPunchedIn ?? false;
   const hasPunchedOut = today?.hasPunchedOut ?? false;
   const onBreak = today?.onBreak ?? false;
-  const isHalfDayLeave = isHalfDayUnpaidWorkMode(today?.workMode);
+  const isHalfDayLeave = isHalfDayWorkMode(today?.workMode);
+  const workGoalHours = today?.idealHours ?? (isHalfDayLeave ? 4 : IDEAL_WORKING_HOURS);
   const leavePunchBlocked = Boolean(today?.leavePunchBlocked);
   const leavePunchBlockMessage = today?.leavePunchBlockMessage?.trim() ?? "";
   const phase = getPhase(today, hasPunchedIn, hasPunchedOut, onBreak);
@@ -318,7 +319,7 @@ export function PunchDesk({
             <WorkTimer
               workedMs={liveWorkedMs}
               showProgress
-              idealHours={today?.idealHours ?? IDEAL_WORKING_HOURS}
+              idealHours={workGoalHours}
             />
           ) : phase === "done" ? (
             <div
@@ -335,7 +336,7 @@ export function PunchDesk({
               </p>
               {dayOutcome === "short" && shortfallAmount ? (
                 <p className="mt-2 text-sm font-medium text-amber-600 dark:text-amber-400">
-                  {shortfallAmount} short of {IDEAL_WORKING_HOURS}h
+                  {shortfallAmount} short of {workGoalHours}h
                 </p>
               ) : null}
               {dayOutcome === "overtime" && today?.overtime && today.overtime !== "—" ? (
@@ -414,7 +415,7 @@ export function PunchDesk({
               </p>
               <p className="text-sm leading-relaxed text-amber-900/85 dark:text-amber-100/85">
                 You left <span className="font-semibold tabular-nums">{shortfallAmount}</span>{" "}
-                before your {IDEAL_WORKING_HOURS}h work goal
+                before your {workGoalHours}h work goal
                 {today?.punchOut ? (
                   <>
                     {" "}

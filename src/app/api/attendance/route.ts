@@ -6,6 +6,7 @@ import {
   IDEAL_SHIFT_HOURS,
   IDEAL_WORKING_HOURS,
   WORK_MODE_OPTIONS,
+  idealWorkingHoursForWorkMode,
   isHalfDayUnpaidWorkMode,
 } from "@/lib/attendance/constants";
 import { formatBreakAllowance, parseDurationToMs, parseTimeOnDate } from "@/lib/attendance/time";
@@ -139,7 +140,7 @@ export const GET = withActiveSession(async (req, user) => {
       }),
     ]);
     const workedMs = today ? computeLiveWorkedMs(today) : 0;
-    const idealHours = isHalfDayUnpaidWorkMode(today?.workMode) ? 4 : IDEAL_WORKING_HOURS;
+    const idealHours = idealWorkingHoursForWorkMode(today?.workMode);
     const idealBreakHours = isHalfDayUnpaidWorkMode(today?.workMode) ? 0 : IDEAL_BREAK_HOURS;
     const idealMs = idealHours * 60 * 60 * 1000;
     const remainingMs = Math.max(0, idealMs - workedMs);
@@ -340,9 +341,11 @@ export const POST = withActiveSession(async (req, user) => {
         workedFormatted: formatDurationHms(workedMs),
         earlyLeaveReason: record.earlyLeaveReason ?? "",
         dailyUpdate: record.dailyUpdate ?? "",
-        idealHours: isHalfDayUnpaidWorkMode(record.workMode) ? 4 : IDEAL_WORKING_HOURS,
+        idealHours: idealWorkingHoursForWorkMode(record.workMode),
         idealBreakHours: isHalfDayUnpaidWorkMode(record.workMode) ? 0 : IDEAL_BREAK_HOURS,
-        idealShiftHours: isHalfDayUnpaidWorkMode(record.workMode) ? 4 : IDEAL_SHIFT_HOURS,
+        idealShiftHours:
+          idealWorkingHoursForWorkMode(record.workMode) +
+          (isHalfDayUnpaidWorkMode(record.workMode) ? 0 : IDEAL_BREAK_HOURS),
       },
     });
 
@@ -423,9 +426,11 @@ export const PATCH = withActiveSession(async (req, user) => {
         workedFormatted: formatDurationHms(workedMs),
         earlyLeaveReason: record.earlyLeaveReason ?? "",
         dailyUpdate: record.dailyUpdate ?? "",
-        idealHours: isHalfDayUnpaidWorkMode(record.workMode) ? 4 : IDEAL_WORKING_HOURS,
+        idealHours: idealWorkingHoursForWorkMode(record.workMode),
         idealBreakHours: isHalfDayUnpaidWorkMode(record.workMode) ? 0 : IDEAL_BREAK_HOURS,
-        idealShiftHours: isHalfDayUnpaidWorkMode(record.workMode) ? 4 : IDEAL_SHIFT_HOURS,
+        idealShiftHours:
+          idealWorkingHoursForWorkMode(record.workMode) +
+          (isHalfDayUnpaidWorkMode(record.workMode) ? 0 : IDEAL_BREAK_HOURS),
       },
     });
   } catch (error: unknown) {

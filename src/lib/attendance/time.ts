@@ -3,6 +3,7 @@ import {
   IDEAL_SHIFT_HOURS,
   IDEAL_WORKING_HOURS,
   IMPORT_DEFAULT_BREAK,
+  idealWorkingHoursForWorkMode,
   isHalfDayUnpaidWorkMode,
 } from "./constants";
 import { WORKING_STATUS, type WorkingStatus } from "./constants";
@@ -379,9 +380,7 @@ export function computeAttendanceMetrics(params: {
   const totalBreakMs = resolveAttendanceBreakMs(params.totalBreakTime, params.workMode);
   const hasOut = Boolean(params.punchOut.trim());
   const punchedOut = params.punchedOut ?? hasOut;
-  const requiredMs = isHalfDayUnpaidWorkMode(params.workMode)
-    ? 4 * 60 * 60 * 1000
-    : idealWorkingMs();
+  const requiredMs = idealWorkingHoursForWorkMode(params.workMode) * 60 * 60 * 1000;
 
   if (!params.punchIn.trim() || !hasOut) {
     return {

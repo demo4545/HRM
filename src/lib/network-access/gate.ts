@@ -52,15 +52,17 @@ export async function evaluateNetworkAccess(
   }
 
   try {
-    const [settings, remoteEmployees, networks, companyWfhToday] = await Promise.all([
-      getNetworkAccessSettings(),
+    // Settings first: when restriction is off, skip the other three reads.
+    const settings = await getNetworkAccessSettings();
+    if (!settings.restrictionEnabled) {
+      return { allowed: true, reason: "restriction_disabled", clientIp };
+    }
+
+    const [remoteEmployees, networks, companyWfhToday] = await Promise.all([
       listRemoteAccessEmployees(),
       listOfficeNetworks(),
       isCompanyWfhDay(),
     ]);
-    if (!settings.restrictionEnabled) {
-      return { allowed: true, reason: "restriction_disabled", clientIp };
-    }
 
     // Company-wide WFH day: every employee can punch from any network.
     if (companyWfhToday) {

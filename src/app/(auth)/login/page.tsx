@@ -70,9 +70,6 @@ function LoginPageContent() {
       const parsed = await parseJsonResponse<{
         error?: string;
         ok?: boolean;
-        requiresAbsenceExplanation?: boolean;
-        requiresMorningPunch?: boolean;
-        requiresSiteGate?: boolean;
         networkAllowed?: boolean;
       }>(res);
       if (parsed.invalid || parsed.empty) {
@@ -90,11 +87,8 @@ function LoginPageContent() {
         window.location.assign("/network-blocked");
         return;
       }
-      if (data.requiresSiteGate || data.requiresAbsenceExplanation || data.requiresMorningPunch) {
-        setAbsenceGateSessionHint(true);
-        window.location.assign("/employee/punch");
-        return;
-      }
+      // Punch-desk gates (absence / morning) sync after navigation via DashboardShell.
+      // Do not block sign-in on those checks — clears any stale "must punch" hint.
       setAbsenceGateSessionHint(false);
       window.location.assign(from);
     } catch (error: unknown) {

@@ -1,6 +1,9 @@
 /** Net working time required per day (break time does not count). */
 export const IDEAL_WORKING_HOURS = 8;
 
+/** Required net working time when the day is a half-day leave (AM or PM). */
+export const HALF_DAY_WORKING_HOURS = 4;
+
 /** Standard paid break allowance per day. */
 export const IDEAL_BREAK_HOURS = 1;
 
@@ -121,6 +124,21 @@ export function workModeOptionLabel(mode: string): string {
 
 export function isHalfDayUnpaidWorkMode(value?: string | null): boolean {
   return canonicalizeWorkMode(value ?? "") === WORK_MODE.HALF_DAY_UNPAID_LEAVE;
+}
+
+/** Any half-day leave / WFH-HD mode — required work target is HALF_DAY_WORKING_HOURS. */
+export function isHalfDayWorkMode(value?: string | null): boolean {
+  const mode = canonicalizeWorkMode(value ?? "");
+  return (
+    mode === WORK_MODE.HALF_DAY_PAID_LEAVE ||
+    mode === WORK_MODE.HALF_DAY_UNPAID_LEAVE ||
+    mode === WORK_MODE.WFH_HALF_DAY
+  );
+}
+
+/** Required net working hours for the day given its work mode. */
+export function idealWorkingHoursForWorkMode(workMode?: string | null): number {
+  return isHalfDayWorkMode(workMode) ? HALF_DAY_WORKING_HOURS : IDEAL_WORKING_HOURS;
 }
 
 /** Full-day leave / holiday modes that do not require punch or break times. */

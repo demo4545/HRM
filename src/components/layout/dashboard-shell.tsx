@@ -24,12 +24,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const gateRole = user ? roleRequiresAbsenceExplanationGate(user.role) : false;
   const onPunchPage = pathname === PUNCH_GATE_ROUTE || pathname.startsWith(`${PUNCH_GATE_ROUTE}/`);
   const gateApplies = gateRole && !onPunchPage;
-  // Prefer the login-set hint. Unknown (null) must not block the shell — middleware
-  // already enforces punch-gate cookies; we only redirect when we know gate is on.
+
   const [gateActive, setGateActive] = useState<boolean>(() => {
     if (!gateApplies) return false;
     return readAbsenceGateSessionHint() === true;
   });
+  const [gateChecked, setGateChecked] = useState(() => !gateApplies);
+  const [prevGateApplies, setPrevGateApplies] = useState(gateApplies);
+
+  // Adjust state while rendering when gate applicability changes (React-recommended).
+  // Avoids synchronous setState inside an effect.
+  if (gateApplies !== prevGateApplies) {
+    setPrevGateApplies(gateApplies);
+    setGateChecked(!gateApplies);
+    if (!gateApplies) setGateActive(false);
+  }
 
   useEffect(() => {
     if (!loading && !user) {
@@ -54,20 +63,28 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           cache: "no-store",
         });
         const parsed = await parseJsonResponse<{ active?: boolean }>(res);
-        if (cancelled || parsed.invalid || parsed.empty) return;
+        if (cancelled) return;
+        if (parsed.invalid || parsed.empty) {
+          setGateChecked(true);
+          return;
+        }
         const active = Boolean(parsed.data?.active);
         setAbsenceGateSessionHint(active);
         setGateActive(active);
+        setGateChecked(true);
         if (active) {
           router.replace(PUNCH_GATE_ROUTE);
         }
       } catch {
+        if (cancelled) return;
         const hint = readAbsenceGateSessionHint();
-        if (!cancelled && hint === true) {
+        if (hint === true) {
           setGateActive(true);
+          setGateChecked(true);
           router.replace(PUNCH_GATE_ROUTE);
-        } else if (!cancelled) {
+        } else {
           setGateActive(false);
+          setGateChecked(true);
         }
       }
     })();
@@ -88,12 +105,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (gateApplies && gateActive) {
+  if (gateApplies && (!gateChecked || gateActive)) {
     return (
       <div className="bg-ex-bg flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="border-ex-border border-t-ex-secondary size-10 animate-spin rounded-full border-2" />
-          <p className="text-ex-muted text-sm">Redirecting to punch desk…</p>
+          <p className="text-ex-muted text-sm">
+            {gateActive ? "Redirecting to punch desk…" : "Checking attendance requirements…"}
+          </p>
         </div>
       </div>
     );
