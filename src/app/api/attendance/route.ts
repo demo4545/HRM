@@ -247,10 +247,16 @@ export const POST = withActiveSession(async (req, user) => {
 
     if (punchActions.has(action)) {
       try {
+        const todayBeforeAction = await attendanceRepo.getTodayAttendance(storageRef);
+        const hasOpenPunchSession = Boolean(
+          todayBeforeAction?.punchIn?.trim() && !todayBeforeAction?.punchOut?.trim(),
+        );
         await assertPunchAllowedWhileOnLeave({
           employeeId: employee!.employeeId,
           employeeName: employee!.employeeName,
           attendanceSpreadsheetId: employee!.attendanceSpreadsheetId,
+          action,
+          hasOpenPunchSession,
         });
       } catch (leaveError) {
         return NextResponse.json(

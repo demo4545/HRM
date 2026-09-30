@@ -224,6 +224,8 @@ export function PunchDesk({
   const workGoalHours = today?.idealHours ?? (isHalfDayLeave ? 4 : IDEAL_WORKING_HOURS);
   const leavePunchBlocked = Boolean(today?.leavePunchBlocked);
   const leavePunchBlockMessage = today?.leavePunchBlockMessage?.trim() ?? "";
+  const leaveOpenSession = leavePunchBlocked && hasPunchedIn && !hasPunchedOut;
+  const showLeaveUnavailable = leavePunchBlocked && !leaveOpenSession;
   const phase = getPhase(today, hasPunchedIn, hasPunchedOut, onBreak);
   const dayOutcome = getDayOutcome(today);
   const shortfallAmount = parseShortfallAmount(today?.overtime);
@@ -282,9 +284,13 @@ export function PunchDesk({
                 </p>
               </div>
             </div>
-            {today?.leavePunchBlocked ? (
+            {showLeaveUnavailable ? (
               <Badge variant="info" className="w-fit gap-1.5">
                 On leave — punch blocked
+              </Badge>
+            ) : leaveOpenSession ? (
+              <Badge variant="info" className="w-fit gap-1.5">
+                On leave after this punch out
               </Badge>
             ) : today?.status && hasPunchedIn ? (
               <Badge variant={statusBadgeVariant(today.status)} className="w-fit">
@@ -384,7 +390,7 @@ export function PunchDesk({
           <StatPill label={fourthStat.label} value={fourthStat.value} tone={fourthStat.tone} />
         </div>
 
-        {leavePunchBlocked && leavePunchBlockMessage ? (
+        {showLeaveUnavailable && leavePunchBlockMessage ? (
           <div
             role="status"
             className="border-ex-chip-info-border bg-ex-chip-info-bg flex items-start gap-3 rounded-xl border px-4 py-3"
@@ -471,7 +477,7 @@ export function PunchDesk({
                 size="lg"
                 variant="secondary"
                 className="h-12 min-w-[160px] gap-2 font-semibold"
-                disabled={acting || loading || leavePunchBlocked}
+                disabled={acting || loading || (leavePunchBlocked && !leaveOpenSession)}
                 onClick={onPunchOut}
               >
                 {actingAction === "punch-out" ? (
@@ -488,7 +494,7 @@ export function PunchDesk({
             <Button
               size="lg"
               className="h-12 min-w-[200px] flex-1 gap-2 text-base font-semibold sm:flex-none"
-              disabled={acting || loading || leavePunchBlocked}
+              disabled={acting || loading || (leavePunchBlocked && !leaveOpenSession)}
               onClick={onBreakEnd}
             >
               {actingAction === "break-end" ? (
