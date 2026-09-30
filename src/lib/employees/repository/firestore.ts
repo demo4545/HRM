@@ -10,6 +10,8 @@ import { getAdminFirestore } from "@/lib/firebase/admin";
 
 const EMPLOYEES_COLLECTION = "employees";
 const META_DOC_ID = "meta";
+/** Warm instances reuse headers across concurrent logins during rush hour. */
+const HEADERS_CACHE_TTL_MS = 60_000;
 
 export type EmployeeRowRecord = {
   sheetRow: number;
@@ -18,6 +20,9 @@ export type EmployeeRowRecord = {
 };
 
 let bootstrapPromise: Promise<void> | null = null;
+let headersCache: { value: string[]; expiresAt: number } | null = null;
+let headersInflight: Promise<string[]> | null = null;
+let metaExistsCache = false;
 
 function employeesCollection() {
   return getAdminFirestore().collection(EMPLOYEES_COLLECTION);
@@ -38,12 +43,16 @@ function loginIndexFields(
 }
 
 async function ensureEmployeesBootstrapped(): Promise<void> {
+  if (metaExistsCache) return;
   if (bootstrapPromise) return bootstrapPromise;
 
   bootstrapPromise = (async () => {
     const db = getAdminFirestore();
     const metaSnap = await db.collection(EMPLOYEES_COLLECTION).doc(META_DOC_ID).get();
-    if (metaSnap.exists) return;
+    if (metaSnap.exists) {
+      metaExistsCache = true;
+      return;
+    }
 
     const raw = await readSheet(EMPLOYEE_SHEET_RANGE);
     if (raw.length < 2) {
@@ -69,6 +78,8 @@ async function ensureEmployeesBootstrapped(): Promise<void> {
     }
 
     await batch.commit();
+    metaExistsCache = true;
+    headersCache = null;
     console.info("[firebase] bootstrapped employees from Google Sheets");
   })().finally(() => {
     bootstrapPromise = null;
@@ -81,26 +92,44 @@ async function persistHeadersIfNeeded(headers: string[]): Promise<string[]> {
   const ensured = ensureRequiredEmployeeFormHeaders(headers);
   if (employeeHeadersEqual(headers, ensured)) return headers;
   await employeesCollection().doc(META_DOC_ID).set({ headers: ensured }, { merge: true });
+  headersCache = { value: ensured, expiresAt: Date.now() + HEADERS_CACHE_TTL_MS };
   return ensured;
 }
 
 async function getHeaders(): Promise<string[]> {
-  await ensureEmployeesBootstrapped();
-  const snap = await employeesCollection().doc(META_DOC_ID).get();
-  let headers = (snap.data()?.headers as string[] | undefined) ?? [];
-  if (headers.length > 0) return persistHeadersIfNeeded(headers);
-
-  // Meta may exist without headers (empty bootstrap). Pull once from Sheets.
-  try {
-    const raw = await readSheet(EMPLOYEE_SHEET_RANGE);
-    headers = getSheetHeaders(raw);
-    if (headers.length > 0) {
-      return persistHeadersIfNeeded(headers);
-    }
-  } catch (error) {
-    console.error("[firebase] failed to refresh employee headers from Sheets:", error);
+  if (headersCache && Date.now() < headersCache.expiresAt) {
+    return headersCache.value;
   }
-  return headers;
+  if (headersInflight) return headersInflight;
+
+  headersInflight = (async () => {
+    await ensureEmployeesBootstrapped();
+    const snap = await employeesCollection().doc(META_DOC_ID).get();
+    let headers = (snap.data()?.headers as string[] | undefined) ?? [];
+    if (headers.length > 0) {
+      const ensured = await persistHeadersIfNeeded(headers);
+      headersCache = { value: ensured, expiresAt: Date.now() + HEADERS_CACHE_TTL_MS };
+      return ensured;
+    }
+
+    // Meta may exist without headers (empty bootstrap). Pull once from Sheets.
+    try {
+      const raw = await readSheet(EMPLOYEE_SHEET_RANGE);
+      headers = getSheetHeaders(raw);
+      if (headers.length > 0) {
+        const ensured = await persistHeadersIfNeeded(headers);
+        headersCache = { value: ensured, expiresAt: Date.now() + HEADERS_CACHE_TTL_MS };
+        return ensured;
+      }
+    } catch (error) {
+      console.error("[firebase] failed to refresh employee headers from Sheets:", error);
+    }
+    return headers;
+  })().finally(() => {
+    headersInflight = null;
+  });
+
+  return headersInflight;
 }
 
 export async function getEmployeeHeadersFirestore(): Promise<string[]> {
@@ -128,24 +157,24 @@ export async function findEmployeeByLogin(login: string): Promise<EmployeeRowRec
   const loginNorm = login.trim().toLowerCase();
   if (!loginNorm) return null;
 
-  await ensureEmployeesBootstrapped();
   const headers = await getHeaders();
+  const looksLikeEmail = loginNorm.includes("@");
 
-  // Prefer indexed login fields when present (written on create/update).
-  const [byEmail, byUsername] = await Promise.all([
-    employeesCollection()
-      .where("emailLower", "==", loginNorm)
-      .limit(1)
-      .get()
-      .catch(() => null),
-    employeesCollection()
-      .where("usernameLower", "==", loginNorm)
-      .limit(1)
-      .get()
-      .catch(() => null),
-  ]);
+  const queryByEmail = () =>
+    employeesCollection().where("emailLower", "==", loginNorm).limit(1).get().catch(() => null);
+  const queryByUsername = () =>
+    employeesCollection().where("usernameLower", "==", loginNorm).limit(1).get().catch(() => null);
 
-  const indexedDoc = byEmail?.docs[0] ?? byUsername?.docs[0];
+  // One indexed read first (email or username), second only if needed.
+  const primary = looksLikeEmail ? await queryByEmail() : await queryByUsername();
+  const secondary =
+    primary?.docs[0] && primary.docs[0].id !== META_DOC_ID
+      ? null
+      : looksLikeEmail
+        ? await queryByUsername()
+        : await queryByEmail();
+
+  const indexedDoc = primary?.docs[0] ?? secondary?.docs[0];
   if (indexedDoc && indexedDoc.id !== META_DOC_ID) {
     const sheetRow = Number(indexedDoc.id);
     if (Number.isFinite(sheetRow) && sheetRow >= 2) {
