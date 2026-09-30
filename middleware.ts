@@ -33,6 +33,7 @@ const PUBLIC_PATHS = [
   "/api/auth/network-access",
   "/api/integrations/google-drive/callback",
   "/api/cron/leave-reminders",
+  "/api/cron/warmup",
   // Vercel Cron (midnight IST) — auth is enforced inside the route.
   "/api/admin/sync-attendance-to-sheets",
   "/api/branding/public",

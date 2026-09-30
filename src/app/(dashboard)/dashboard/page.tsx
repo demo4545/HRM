@@ -142,6 +142,31 @@ function leaveDateLabel(value: string): string {
   return `${formatter.format(parts[0])} – ${formatter.format(parts.at(-1)!)}`;
 }
 
+/** Compact full / half-day label for the Employees On Leave list. */
+function leaveDurationMeta(duration: string): {
+  label: string;
+  kind: "full" | "am" | "pm" | "half";
+} {
+  const normalized = duration.trim().toLowerCase();
+  if (!normalized) return { label: "Full day", kind: "full" };
+  if (
+    normalized === "half_am" ||
+    (normalized.includes("half") && normalized.includes("am")) ||
+    normalized.includes("first half")
+  ) {
+    return { label: "First half", kind: "am" };
+  }
+  if (
+    normalized === "half_pm" ||
+    (normalized.includes("half") && normalized.includes("pm")) ||
+    normalized.includes("second half")
+  ) {
+    return { label: "Second half", kind: "pm" };
+  }
+  if (normalized.includes("half")) return { label: "Half day", kind: "half" };
+  return { label: "Full day", kind: "full" };
+}
+
 function UnapprovedAbsenceEmployeeCard({ employee }: { employee: UnapprovedAbsenceEmployee }) {
   const [imageFailed, setImageFailed] = useState(false);
   const profileSrc = resolveProfileImageSrc(employee.profileImage ?? "");
@@ -183,6 +208,7 @@ function LeaveEmployeeCard({
   birthday?: boolean;
   showDetails?: boolean;
 }) {
+  const duration = leaveDurationMeta(employee.duration);
   const className = cn(
     "group flex items-center gap-3 px-4 py-3.5 transition",
     showDetails && "hover:bg-ex-surface",
@@ -202,8 +228,21 @@ function LeaveEmployeeCard({
         <p className="text-ex-primary group-hover:text-ex-secondary truncate text-sm font-semibold transition">
           {employee.employeeName}
         </p>
-        <p className="text-ex-muted mt-0.5 text-xs">{leaveDateLabel(employee.date)}</p>
+        <p className="text-ex-muted mt-0.5 truncate text-xs">{leaveDateLabel(employee.date)}</p>
       </div>
+      <span
+        className={cn(
+          "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide",
+          duration.kind === "full" &&
+            "bg-ex-chip-warning-bg text-ex-chip-warning-fg ring-ex-chip-warning-border/60 ring-1",
+          (duration.kind === "am" || duration.kind === "half") &&
+            "bg-ex-chip-info-bg text-ex-chip-info-fg ring-ex-chip-info-border/60 ring-1",
+          duration.kind === "pm" &&
+            "bg-ex-secondary/12 text-ex-secondary ring-ex-secondary/25 ring-1",
+        )}
+      >
+        {duration.label}
+      </span>
       {showDetails ? (
         <span className="text-ex-muted group-hover:text-ex-secondary text-base transition">→</span>
       ) : null}

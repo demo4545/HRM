@@ -15,6 +15,10 @@ export type LeavePunchBlock = {
   duration?: string;
 };
 
+export type LeavePunchAction = "punch-in" | "punch-out" | "break-start" | "break-end";
+
+const OPEN_SESSION_ALLOWED_ACTIONS = new Set<LeavePunchAction>(["punch-out", "break-end"]);
+
 function formatLeaveTypeLabel(leaveType: string): string {
   const labels: Record<string, string> = {
     paid: "paid",
@@ -120,9 +124,17 @@ export async function assertPunchAllowedWhileOnLeave(params: {
   employeeName: string;
   attendanceSpreadsheetId?: string;
   now?: Date;
+  action?: LeavePunchAction | string;
+  /** Punched in and not yet punched out — may finish the session during the leave window. */
+  hasOpenPunchSession?: boolean;
 }): Promise<void> {
   const block = await getLeavePunchBlock(params);
-  if (block.blocked) {
-    throw new Error(block.message);
+  if (!block.blocked) return;
+
+  const action = (params.action ?? "") as LeavePunchAction;
+  if (params.hasOpenPunchSession && OPEN_SESSION_ALLOWED_ACTIONS.has(action)) {
+    return;
   }
+
+  throw new Error(block.message);
 }
