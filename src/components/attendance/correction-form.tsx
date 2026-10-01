@@ -86,7 +86,7 @@ export function CorrectionForm({
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={submitting}>
-          {submitting ? "Submitting…" : "Submit request"}
+          {submitting ? "Submitting…" : "Submit Request"}
         </Button>
         {onCancel ? (
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>

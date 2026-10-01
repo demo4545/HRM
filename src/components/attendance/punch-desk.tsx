@@ -240,7 +240,7 @@ export function PunchDesk({
     ? { label: "Overtime", value: "—", tone: "default" as const }
     : dayOutcome === "short" && shortfallAmount
       ? {
-          label: "Early out",
+          label: "Early Out",
           value: shortfallAmount,
           tone: "warning" as const,
         }
@@ -286,11 +286,11 @@ export function PunchDesk({
             </div>
             {showLeaveUnavailable ? (
               <Badge variant="info" className="w-fit gap-1.5">
-                On leave — punch blocked
+                On leave — Punch Blocked
               </Badge>
             ) : leaveOpenSession ? (
               <Badge variant="info" className="w-fit gap-1.5">
-                On leave after this punch out
+                On leave after this Punch Out
               </Badge>
             ) : today?.status && hasPunchedIn ? (
               <Badge variant={statusBadgeVariant(today.status)} className="w-fit">
@@ -303,7 +303,7 @@ export function PunchDesk({
             ) : !hasPunchedIn ? (
               <Badge variant="info" className="w-fit gap-1.5">
                 <LogIn className="size-3.5" aria-hidden />
-                Punch in not done
+                Punch In Not Done
               </Badge>
             ) : null}
           </div>
@@ -335,19 +335,19 @@ export function PunchDesk({
               )}
             >
               <p className="text-ex-muted text-xs font-semibold tracking-wider uppercase">
-                Today&apos;s total
+                Today&apos;s Total
               </p>
               <p className="text-ex-primary mt-1 font-mono text-3xl font-bold tabular-nums">
                 {today?.workingHours ?? "—"}
               </p>
               {dayOutcome === "short" && shortfallAmount ? (
                 <p className="mt-2 text-sm font-medium text-amber-600 dark:text-amber-400">
-                  {shortfallAmount} short of {workGoalHours}h
+                  {shortfallAmount} Short of {workGoalHours}h
                 </p>
               ) : null}
               {dayOutcome === "overtime" && today?.overtime && today.overtime !== "—" ? (
                 <p className="mt-2 text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                  +{today.overtime} overtime
+                  +{today.overtime} Overtime
                 </p>
               ) : null}
             </div>
@@ -367,14 +367,14 @@ export function PunchDesk({
       <div className="border-ex-border bg-ex-elevated space-y-4 border-t p-4 sm:p-6">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <StatPill
-            label="Punch in"
+            label="Punch In"
             value={
               hasPunchedIn ? (today?.punchIn ?? "") : leavePunchBlocked ? "On leave" : "Not done"
             }
             highlight={hasPunchedIn}
             tone={hasPunchedIn ? "default" : leavePunchBlocked ? "info" : "pending"}
           />
-          <StatPill label="Punch out" value={today?.punchOut ?? ""} />
+          <StatPill label="Punch Out" value={today?.punchOut ?? ""} />
           <StatPill
             label="Break"
             value={
@@ -399,7 +399,7 @@ export function PunchDesk({
               <Sun className="text-ex-chip-info-fg size-4" aria-hidden />
             </div>
             <div className="min-w-0 space-y-0.5">
-              <p className="text-ex-chip-info-fg text-sm font-semibold">Punch unavailable</p>
+              <p className="text-ex-chip-info-fg text-sm font-semibold">Punch Unavailable</p>
               <p className="text-ex-chip-info-fg/90 text-sm leading-relaxed">
                 {leavePunchBlockMessage}
               </p>
@@ -417,7 +417,7 @@ export function PunchDesk({
             </div>
             <div className="min-w-0 space-y-0.5">
               <p className="text-sm font-semibold text-amber-950 dark:text-amber-50">
-                Punched out early
+                Punched Out Early
               </p>
               <p className="text-sm leading-relaxed text-amber-900/85 dark:text-amber-100/85">
                 You left <span className="font-semibold tabular-nums">{shortfallAmount}</span>{" "}
@@ -527,7 +527,7 @@ export function PunchDesk({
               className="text-ex-muted sm:ml-auto"
               onClick={onRequestCorrection}
             >
-              Request correction
+              Request Correction
             </Button>
           ) : null}
         </div>

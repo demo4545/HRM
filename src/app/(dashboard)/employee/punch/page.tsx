@@ -153,7 +153,7 @@ export default function PunchPage() {
   return (
     <div className="w-full space-y-6">
       <div className="space-y-1">
-        <h1 className="text-ex-primary text-2xl font-bold tracking-tight">Punch desk</h1>
+        <h1 className="text-ex-primary text-2xl font-bold tracking-tight">Punch Desk</h1>
         <p className="text-ex-muted text-sm">
           Your daily check-in — one tap to start, one tap to finish.
         </p>
@@ -181,7 +181,7 @@ export default function PunchPage() {
           {!today?.hasPunchedIn ? (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Work mode</CardTitle>
+                <CardTitle className="text-base">Work Mode</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 <Select
@@ -240,7 +240,7 @@ export default function PunchPage() {
           {today?.hasPunchedIn ? (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Daily update</CardTitle>
+                <CardTitle className="text-base">Daily Update</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <textarea
@@ -266,7 +266,7 @@ export default function PunchPage() {
                         Saving...
                       </>
                     ) : (
-                      "Save update"
+                      "Save Update"
                     )}
                   </Button>
                 </div>

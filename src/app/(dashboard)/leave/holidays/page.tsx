@@ -21,6 +21,7 @@ import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useAuth } from "@/contexts/auth-provider";
+import { useNotifications } from "@/contexts/notifications-provider";
 import { canManageEmployees } from "@/lib/auth/roles";
 import { formatIsoDate } from "@/lib/attendance/time";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
@@ -83,6 +84,7 @@ function formatShortMonthDay(iso: string): { day: string; month: string } {
 
 export default function CompanyHolidaysPage() {
   const { user } = useAuth();
+  const { pushToast } = useNotifications();
   const canManage = user ? canManageEmployees(user.role) : false;
   const [holidayYear, setHolidayYear] = useState(2026);
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
@@ -99,7 +101,6 @@ export default function CompanyHolidaysPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<CompanyHoliday | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [dayTooltip, setDayTooltip] = useState<{
     name: string;
     typeLabel: string;
@@ -183,17 +184,20 @@ export default function CompanyHolidaysPage() {
       })
       .catch((loadError: unknown) => {
         if (!cancelled) {
-          setError(toUserFacingFetchError(loadError));
+          pushToast({
+            title: "Could not load holidays",
+            body: toUserFacingFetchError(loadError),
+            variant: "error",
+          });
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [holidayYear]);
+  }, [holidayYear, pushToast]);
 
   const openCreate = () => {
-    setError(null);
     const today = formatIsoDate();
     setEditor({
       date: today.startsWith(`${holidayYear}-`) ? today : `${holidayYear}-01-01`,
@@ -203,7 +207,6 @@ export default function CompanyHolidaysPage() {
   };
 
   const openEdit = (holiday: CompanyHoliday) => {
-    setError(null);
     setEditor({
       id: holiday.id,
       date: holiday.date,
@@ -214,7 +217,11 @@ export default function CompanyHolidaysPage() {
 
   const saveHoliday = async () => {
     if (!editor?.date || !editor.name.trim()) {
-      setError("Holiday date and name are required.");
+      pushToast({
+        title: "Missing Details",
+        body: "Holiday date and name are required.",
+        variant: "error",
+      });
       return;
     }
 
@@ -222,14 +229,15 @@ export default function CompanyHolidaysPage() {
       (holiday) => holiday.date === editor.date && holiday.id !== editor.id,
     );
     if (duplicate) {
-      setError(
-        `A holiday already exists on this date (${duplicate.name}). Edit that holiday to change the name.`,
-      );
+      pushToast({
+        title: "Date Already Taken",
+        body: `A holiday already exists on this date (${duplicate.name}). Edit that holiday to change the name.`,
+        variant: "error",
+      });
       return;
     }
 
     setSaving(true);
-    setError(null);
     try {
       const response = await fetch("/api/company-holidays", {
         method: editor.id ? "PATCH" : "POST",
@@ -258,8 +266,19 @@ export default function CompanyHolidaysPage() {
       );
       setHolidayMonth("all");
       setEditor(null);
+      pushToast({
+        title: editor.id ? "Holiday Updated" : "Holiday Added",
+        body: editor.id
+          ? "The holiday was updated successfully."
+          : "The holiday was added successfully.",
+        variant: "success",
+      });
     } catch (saveError) {
-      setError(toUserFacingActionError(saveError));
+      pushToast({
+        title: "Save Failed",
+        body: toUserFacingActionError(saveError),
+        variant: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -267,7 +286,6 @@ export default function CompanyHolidaysPage() {
 
   const deleteHoliday = async (holiday: CompanyHoliday) => {
     setDeletingId(holiday.id);
-    setError(null);
     try {
       const response = await fetch("/api/company-holidays", {
         method: "DELETE",
@@ -285,8 +303,17 @@ export default function CompanyHolidaysPage() {
       setHolidays((current) => current.filter((item) => item.id !== holiday.id));
       setEditor((current) => (current?.id === holiday.id ? null : current));
       setPendingDelete(null);
+      pushToast({
+        title: "Holiday Deleted",
+        body: `"${holiday.name}" was removed.`,
+        variant: "success",
+      });
     } catch (deleteError) {
-      setError(toUserFacingActionError(deleteError));
+      pushToast({
+        title: "Delete Failed",
+        body: toUserFacingActionError(deleteError),
+        variant: "error",
+      });
     } finally {
       setDeletingId(null);
     }
@@ -304,7 +331,7 @@ export default function CompanyHolidaysPage() {
           <div className="bg-ex-chip-success-bg text-ex-chip-success-fg absolute top-4 right-4 flex size-9 items-center justify-center rounded-full">
             <CalendarDays className="size-4" aria-hidden />
           </div>
-          <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">Total holidays</p>
+          <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">Total Holidays</p>
           <p className="text-ex-primary mt-2 text-2xl font-semibold tabular-nums">
             {yearHolidays.length}
           </p>
@@ -313,7 +340,7 @@ export default function CompanyHolidaysPage() {
           <div className="bg-ex-secondary/15 text-ex-secondary absolute top-4 right-4 flex size-9 items-center justify-center rounded-full">
             <CalendarRange className="size-4" aria-hidden />
           </div>
-          <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">Leave days</p>
+          <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">Leave Days</p>
           <p className="text-ex-primary mt-2 text-2xl font-semibold tabular-nums">{leaveCount}</p>
         </div>
         <div className="border-ex-border bg-ex-elevated relative overflow-hidden rounded-xl border p-4 shadow-sm dark:shadow-none">
@@ -357,7 +384,7 @@ export default function CompanyHolidaysPage() {
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search holidays…"
+              placeholder="Search Holidays…"
               className="pl-9"
               aria-label="Search holidays"
             />
@@ -366,9 +393,9 @@ export default function CompanyHolidaysPage() {
             value={holidayMonth}
             onChange={(event) => setHolidayMonth(event.target.value)}
             className="w-36"
-            aria-label="Filter by month"
+            aria-label="Filter by Month"
           >
-            <option value="all">All months</option>
+            <option value="all">All Months</option>
             {MONTH_NAMES.map((month, index) => (
               <option key={month} value={index}>
                 {month}
@@ -379,9 +406,9 @@ export default function CompanyHolidaysPage() {
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value as TypeFilter)}
             className="w-36"
-            aria-label="Filter by type"
+            aria-label="Filter by Type"
           >
-            <option value="all">All types</option>
+            <option value="all">All Types</option>
             <option value="leave">Leave</option>
             <option value="celebration">Celebration</option>
           </Select>
@@ -433,7 +460,7 @@ export default function CompanyHolidaysPage() {
                 <Input
                   value={editor.name}
                   maxLength={120}
-                  placeholder="Holiday name"
+                  placeholder="Holiday Name"
                   onChange={(event) =>
                     setEditor((current) =>
                       current ? { ...current, name: event.target.value } : current,
@@ -443,7 +470,7 @@ export default function CompanyHolidaysPage() {
               </label>
               <label className="space-y-1.5">
                 <span className="text-ex-muted text-xs font-medium tracking-wide uppercase">
-                  Day type
+                  Day Type
                 </span>
                 <Select
                   value={editor.type}
@@ -469,23 +496,16 @@ export default function CompanyHolidaysPage() {
                 disabled={saving}
                 onClick={() => {
                   setEditor(null);
-                  setError(null);
                 }}
               >
                 Cancel
               </Button>
               <Button variant="secondary" disabled={saving} onClick={() => void saveHoliday()}>
-                {saving ? "Saving…" : editor.id ? "Update holiday" : "Add holiday"}
+                {saving ? "Saving…" : editor.id ? "Update Holiday" : "Add Holiday"}
               </Button>
             </div>
           </div>
         </div>
-      ) : null}
-
-      {error ? (
-        <p className="border-ex-banner-danger-border bg-ex-banner-danger-bg text-ex-banner-danger-fg rounded-lg border px-4 py-3 text-sm">
-          {error}
-        </p>
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
@@ -683,7 +703,7 @@ export default function CompanyHolidaysPage() {
                 setTypeFilter("all");
               }}
             >
-              View all →
+              View All →
             </button>
           </div>
           {upcomingHolidays.length === 0 ? (
@@ -759,7 +779,7 @@ export default function CompanyHolidaysPage() {
 
       <ConfirmationDialog
         open={Boolean(pendingDelete)}
-        title="Delete holiday?"
+        title="Delete Holiday?"
         description={
           pendingDelete ? (
             <>

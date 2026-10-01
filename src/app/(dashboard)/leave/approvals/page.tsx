@@ -81,24 +81,24 @@ function sortApprovalsByDate(applications: LeaveApprovalRow[]): LeaveApprovalRow
 function emptyCopy(filter: StatusFilter): { title: string; description: string } {
   if (filter === LEAVE_STATUS.APPLIED) {
     return {
-      title: "No pending leave requests",
+      title: "No Pending Leave Requests",
       description: "Applied leave requests from all employees will appear here for review.",
     };
   }
   if (filter === LEAVE_STATUS.ACCEPTED) {
     return {
-      title: "No accepted leave requests",
+      title: "No Accepted Leave Requests",
       description: "Approved leave history from all employees will appear here.",
     };
   }
   if (filter === LEAVE_STATUS.REJECTED) {
     return {
-      title: "No rejected leave requests",
+      title: "No Rejected Leave Requests",
       description: "Rejected leave history with reasons will appear here.",
     };
   }
   return {
-    title: "No leave requests",
+    title: "No Leave Requests",
     description: "Leave applications from all employees will appear here.",
   };
 }
@@ -138,7 +138,6 @@ export default function LeaveApprovalsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(LEAVE_STATUS.APPLIED);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [rows, setRows] = useState<LeaveApprovalRow[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
@@ -151,7 +150,6 @@ export default function LeaveApprovalsPage() {
 
   const loadApprovals = useCallback(async () => {
     setLoading(true);
-    setError(null);
     setWarnings([]);
     try {
       const query = statusFilter === "all" ? "all" : statusFilter;
@@ -171,13 +169,17 @@ export default function LeaveApprovalsPage() {
       setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
       setSelectedIds(new Set());
     } catch (err) {
-      setError(toUserFacingFetchError(err));
+      pushToast({
+        title: "Could not load approvals",
+        body: toUserFacingFetchError(err),
+        variant: "error",
+      });
       setRows([]);
       setSelectedIds(new Set());
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, pushToast]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -246,7 +248,6 @@ export default function LeaveApprovalsPage() {
     reason = "",
   ) => {
     setReviewingId(row.id);
-    setError(null);
     try {
       const data = await reviewLeaveRequest(row, status, reason);
 
@@ -270,13 +271,17 @@ export default function LeaveApprovalsPage() {
             : "";
 
       pushToast({
-        title: status === "Accepted" ? "Leave approved" : "Leave rejected",
+        title: status === "Accepted" ? "Leave Approved" : "Leave Rejected",
         body: `${row.employeeName}'s leave request was ${status.toLowerCase()}. The employee has been notified.${emailNote}`,
         href: "/notifications",
         variant: "success",
       });
     } catch (err) {
-      setError(toUserFacingActionError(err));
+      pushToast({
+        title: status === "Accepted" ? "Approve failed" : "Reject failed",
+        body: toUserFacingActionError(err),
+        variant: "error",
+      });
     } finally {
       setReviewingId(null);
     }
@@ -285,7 +290,11 @@ export default function LeaveApprovalsPage() {
   const submitReject = async () => {
     if (!rejectingRow) return;
     if (!rejectReason.trim()) {
-      setError("Please provide a reject reason");
+      pushToast({
+        title: "Reject reason required",
+        body: "Please provide a reject reason.",
+        variant: "error",
+      });
       return;
     }
     await reviewApplication(rejectingRow, "Rejected", rejectReason.trim());
@@ -296,7 +305,6 @@ export default function LeaveApprovalsPage() {
     if (targets.length < 2) return;
 
     setBulkBusy(true);
-    setError(null);
     setBulkRejectOpen(false);
 
     let succeeded = 0;
@@ -319,7 +327,7 @@ export default function LeaveApprovalsPage() {
 
     if (succeeded > 0) {
       pushToast({
-        title: status === "Accepted" ? "Leaves approved" : "Leaves rejected",
+        title: status === "Accepted" ? "Leaves Approved" : "Leaves Rejected",
         body: `${succeeded} leave request${succeeded === 1 ? "" : "s"} ${status.toLowerCase()}. Employees have been notified.`,
         href: "/notifications",
         variant: "success",
@@ -327,9 +335,11 @@ export default function LeaveApprovalsPage() {
     }
 
     if (failures.length > 0) {
-      setError(
-        `${failures.length} request${failures.length === 1 ? "" : "s"} failed:\n${failures.slice(0, 5).join("\n")}${failures.length > 5 ? `\n…and ${failures.length - 5} more` : ""}`,
-      );
+      pushToast({
+        title: `${failures.length} request${failures.length === 1 ? "" : "s"} failed`,
+        body: `${failures.slice(0, 3).join(" · ")}${failures.length > 3 ? ` · …and ${failures.length - 3} more` : ""}`,
+        variant: "error",
+      });
     }
   };
 
@@ -337,11 +347,11 @@ export default function LeaveApprovalsPage() {
     <div className="space-y-8">
       <PageHeader
         title="Leave Approvals"
-        description="Review leave and attendance correction requests from all employees. HR and Super Admin can accept or reject pending items; leave rejection requires a reason. Select multiple pending rows to approve or reject in bulk."
+        // description="Review leave and attendance correction requests from all employees. HR and Super Admin can accept or reject pending items; leave rejection requires a reason. Select multiple pending rows to approve or reject in bulk."
         actions={
           <div className="flex items-center gap-2">
-            {statusFilter === LEAVE_STATUS.APPLIED ? (
-              <Badge variant={pendingCount > 0 ? "warning" : "default"}>
+            {statusFilter === LEAVE_STATUS.APPLIED && pendingCount > 0 ? (
+              <Badge variant="warning">
                 {pendingCount} pending
               </Badge>
             ) : null}
@@ -385,7 +395,7 @@ export default function LeaveApprovalsPage() {
       {showBulkActions ? (
         <div className="border-ex-border bg-ex-elevated flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
           <p className="text-ex-primary text-sm font-medium">
-            {selectedCount} pending leave{selectedCount === 1 ? "" : "s"} selected
+            {selectedCount} Pending Leave{selectedCount === 1 ? "" : "s"} Selected
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -402,7 +412,7 @@ export default function LeaveApprovalsPage() {
               disabled={actionsBusy}
               onClick={() => void runBulkReview("Accepted")}
             >
-              {bulkBusy ? "Working…" : "Bulk accept"}
+              {bulkBusy ? "Working…" : "Bulk Accept"}
             </Button>
             <Button
               size="sm"
@@ -411,10 +421,9 @@ export default function LeaveApprovalsPage() {
               onClick={() => {
                 setBulkRejectReason("");
                 setBulkRejectOpen(true);
-                setError(null);
               }}
             >
-              Bulk reject
+              Bulk Reject
             </Button>
           </div>
         </div>
@@ -422,19 +431,13 @@ export default function LeaveApprovalsPage() {
 
       {warnings.length > 0 ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-          <p className="font-medium">Some employees could not be loaded</p>
+          <p className="font-medium">Some Employees Could Not Be Loaded</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             {warnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
           </ul>
         </div>
-      ) : null}
-
-      {error ? (
-        <p className="border-ex-banner-danger-border bg-ex-banner-danger-bg text-ex-banner-danger-fg whitespace-pre-line rounded-xl border px-4 py-3 text-sm">
-          {error}
-        </p>
       ) : null}
 
       {rejectingRow ? (
@@ -465,7 +468,7 @@ export default function LeaveApprovalsPage() {
               onClick={() => void submitReject()}
               disabled={actionsBusy}
             >
-              {reviewingId === rejectingRow.id ? "Rejecting..." : "Confirm reject"}
+              {reviewingId === rejectingRow.id ? "Rejecting..." : "Confirm Reject"}
             </Button>
           </div>
         </div>
@@ -488,7 +491,7 @@ export default function LeaveApprovalsPage() {
                         className="accent-ex-secondary size-4"
                         checked={allPendingOnPageSelected}
                         disabled={actionsBusy || pendingOnPage.length === 0}
-                        aria-label="Select all pending leaves on this page"
+                        aria-label="Select All Pending Leaves On This Page"
                         onChange={toggleSelectAllOnPage}
                       />
                     ),
@@ -526,7 +529,7 @@ export default function LeaveApprovalsPage() {
             },
             {
               key: "status",
-              header: "State",
+              header: "Status",
               render: (r) => (
                 <Badge variant={statusBadgeVariant(r.status)}>{r.status || "Pending"}</Badge>
               ),
@@ -535,7 +538,7 @@ export default function LeaveApprovalsPage() {
               ? [
                   {
                     key: "rejectReason" as const,
-                    header: "Reject reason",
+                    header: "Reject Reason",
                     render: (r: LeaveApprovalRow) => r.rejectReason || "—",
                   },
                 ]
@@ -563,7 +566,6 @@ export default function LeaveApprovalsPage() {
                             onClick={() => {
                               setRejectingRow(r);
                               setRejectReason("");
-                              setError(null);
                             }}
                           >
                             Reject
@@ -594,7 +596,7 @@ export default function LeaveApprovalsPage() {
 
       <ConfirmationDialog
         open={bulkRejectOpen}
-        title="Reject selected leave requests?"
+        title="Reject Selected Leave Requests?"
         description={
           <>
             Reject <span className="text-ex-primary font-medium">{selectedCount}</span> pending leave
@@ -602,14 +604,14 @@ export default function LeaveApprovalsPage() {
             items.
           </>
         }
-        confirmText="Reject all"
+        confirmText="Reject All"
         confirmVariant="danger"
         busy={bulkBusy}
         busyText="Rejecting…"
-        inputLabel="Rejection reason (required)"
+        inputLabel="Rejection Reason (required)"
         inputValue={bulkRejectReason}
         onInputChange={setBulkRejectReason}
-        inputPlaceholder="Enter the reason for rejection"
+        inputPlaceholder="Enter The Reason For Rejection"
         inputRequired
         onCancel={() => {
           if (bulkBusy) return;

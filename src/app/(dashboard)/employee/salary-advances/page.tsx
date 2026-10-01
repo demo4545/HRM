@@ -13,6 +13,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
+import { DEFAULT_PAGE_SIZE, Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { ROLES } from "@/app/consts/common";
 import { useAuth } from "@/contexts/auth-provider";
@@ -20,6 +21,7 @@ import { useNotifications } from "@/contexts/notifications-provider";
 import { canManageEmployees } from "@/lib/auth/roles";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { parseEmployeeListApiResponse } from "@/lib/employee";
+import type { SheetPagination } from "@/types/sheet";
 import type { Column } from "@/types/table";
 
 type EmployeeOption = {
@@ -59,6 +61,12 @@ type PreviewWindow = {
 };
 
 type ScheduleSegment = { months: string; amountPerMonth: string };
+
+const DEFAULT_SCHEDULE_SEGMENT: ScheduleSegment = {
+  months: "2",
+  amountPerMonth: "1000",
+};
+const DEFAULT_ADVANCE_AMOUNT = "2000";
 
 type TableRow = {
   id: string;
@@ -119,7 +127,7 @@ function splitLockedOpen(installments: AdvanceInstallment[]) {
 }
 
 function installmentsToFormSegments(installments: AdvanceInstallment[]): ScheduleSegment[] {
-  if (!installments.length) return [{ months: "1", amountPerMonth: "" }];
+  if (!installments.length) return [{ ...DEFAULT_SCHEDULE_SEGMENT }];
   const segments: Array<{ months: number; amountPerMonth: number }> = [];
   for (const row of installments) {
     const last = segments[segments.length - 1];
@@ -146,16 +154,15 @@ export default function SalaryAdvancesPage() {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const [employeeSheetRow, setEmployeeSheetRow] = useState("");
-  const [totalAmount, setTotalAmount] = useState("");
+  const [totalAmount, setTotalAmount] = useState(DEFAULT_ADVANCE_AMOUNT);
   const [lockedTotal, setLockedTotal] = useState(0);
   const [reason, setReason] = useState("");
   const [startYear, setStartYear] = useState<number | null>(null);
   const [startMonth, setStartMonth] = useState<number | null>(null);
-  const [segments, setSegments] = useState<ScheduleSegment[]>([
-    { months: "5", amountPerMonth: "10000" },
-  ]);
+  const [segments, setSegments] = useState<ScheduleSegment[]>([{ ...DEFAULT_SCHEDULE_SEGMENT }]);
   const [preview, setPreview] = useState<PreviewWindow | null>(null);
 
   const isEditing = Boolean(editingId);
@@ -202,12 +209,12 @@ export default function SalaryAdvancesPage() {
   const resetForm = useCallback(() => {
     setEditingId(null);
     setEmployeeSheetRow("");
-    setTotalAmount("");
+    setTotalAmount(DEFAULT_ADVANCE_AMOUNT);
     setLockedTotal(0);
     setReason("");
     setStartYear(null);
     setStartMonth(null);
-    setSegments([{ months: "5", amountPerMonth: "10000" }]);
+    setSegments([{ ...DEFAULT_SCHEDULE_SEGMENT }]);
     setPreview(null);
   }, []);
 
@@ -291,7 +298,7 @@ export default function SalaryAdvancesPage() {
   const tableRows: TableRow[] = useMemo(() => {
     return advances.map((advance) => ({
       id: advance.id,
-      employee: `${advance.employeeName}${advance.employeeId ? ` (${advance.employeeId})` : ""}`,
+      employee: `${advance.employeeName}`,
       total: formatInr(advance.totalAmount),
       schedule: `${advance.installmentCount} mo from ${MONTHS[advance.startMonth - 1]} ${advance.startYear}`,
       paid: formatInr(advance.paidAmount),
@@ -300,6 +307,24 @@ export default function SalaryAdvancesPage() {
       reason: advance.reason || "—",
     }));
   }, [advances]);
+
+  const totalPages = Math.max(1, Math.ceil(tableRows.length / DEFAULT_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+
+  const pagination = useMemo<SheetPagination>(
+    () => ({
+      page: safePage,
+      pageSize: DEFAULT_PAGE_SIZE,
+      total: tableRows.length,
+      totalPages,
+    }),
+    [safePage, tableRows.length, totalPages],
+  );
+
+  const pagedRows = useMemo(() => {
+    const start = (safePage - 1) * DEFAULT_PAGE_SIZE;
+    return tableRows.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [safePage, tableRows]);
 
   const beginEdit = useCallback(
     (advance: AdvanceRow) => {
@@ -498,7 +523,7 @@ export default function SalaryAdvancesPage() {
     return (
       <div className="space-y-8">
         <PageHeader
-          title="Salary advances"
+          title="Salary Advances"
           description="Recover employee salary advances through monthly payroll deductions."
         />
         <AccessDenied
@@ -507,7 +532,7 @@ export default function SalaryAdvancesPage() {
             <Link href="/dashboard">
               <Button variant="outline" size="sm">
                 <ArrowLeft className="size-4" />
-                Back to overview
+                Back To Dashboard
               </Button>
             </Link>
           }
@@ -520,18 +545,9 @@ export default function SalaryAdvancesPage() {
     <div className="space-y-8">
       <PageHeader
         title="Salary Advances"
-        description="Give an employee an advance and recover it automatically from upcoming monthly payrolls, within their increment window."
+        description=""
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="md"
-              onClick={() => void refresh()}
-              disabled={loading || saving}
-            >
-              <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
             <Button
               size="md"
               onClick={() => {
@@ -548,6 +564,15 @@ export default function SalaryAdvancesPage() {
               {showForm ? <X className="size-4" /> : <Plus className="size-4" />}
               {showForm ? "Close Form" : "New Advance"}
             </Button>
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => void refresh()}
+              disabled={loading || saving}
+            >
+              <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
           </div>
         }
       />
@@ -556,7 +581,7 @@ export default function SalaryAdvancesPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {isEditing ? "Edit salary advance schedule" : "Create salary advance"}
+              {isEditing ? "Edit Salary Advance Schedule" : "Create Salary Advance"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -580,7 +605,7 @@ export default function SalaryAdvancesPage() {
                     {employees.map((employee) => (
                       <option key={employee.sheetRow} value={String(employee.sheetRow)}>
                         {employee.name}
-                        {employee.employeeId ? ` (${employee.employeeId})` : ""}
+                        {/* {employee.employeeId ? ` (${employee.employeeId})` : ""} */}
                       </option>
                     ))}
                   </Select>
@@ -609,7 +634,7 @@ export default function SalaryAdvancesPage() {
                   required
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="Family emergency, medical, etc."
+                  placeholder="Family Emergency, Medical, etc."
                   disabled={saving}
                 />
               </div>
@@ -617,11 +642,11 @@ export default function SalaryAdvancesPage() {
               {isEditing ? (
                 <div className="border-ex-border bg-ex-surface/40 rounded-xl border px-4 py-3 text-sm">
                   <p className="text-ex-muted">
-                    Already locked (past months):{" "}
+                    Already Locked (Past Months):{" "}
                     <span className="text-ex-primary font-medium">{formatInr(lockedTotal)}</span>
                   </p>
                   <p className="text-ex-muted mt-1">
-                    Remaining to reschedule:{" "}
+                    Remaining to Reschedule:{" "}
                     <span className="text-ex-primary font-medium">{formatInr(scheduleTarget)}</span>
                   </p>
                   <p className="text-ex-muted mt-1 text-xs">
@@ -635,11 +660,11 @@ export default function SalaryAdvancesPage() {
                 <div className="border-ex-border bg-ex-surface/40 space-y-3 rounded-xl border px-4 py-3 text-sm">
                   <p className="text-ex-primary font-medium">{preview.employeeName}</p>
                   <p className="text-ex-muted">
-                    Last increment: {preview.lastIncrementDate || "—"} · Joining:{" "}
+                    Last Increment: {preview.lastIncrementDate || "—"} · Joining:{" "}
                     {preview.joiningDate || "—"}
                   </p>
                   <p className="text-ex-muted">
-                    Next increment: {preview.nextIncrementDate || "—"} · Available repayment months
+                    Next Increment: {preview.nextIncrementDate || "—"} · Available repayment months
                     from selected start:{" "}
                     <span className="text-ex-primary font-medium">
                       {preview.availableMonthCount}{" "}
@@ -648,7 +673,7 @@ export default function SalaryAdvancesPage() {
                   </p>
                   <div className="space-y-2">
                     <Label htmlFor="advance-start">
-                      {isEditing ? "Reschedule from month" : "Deduction start month"}
+                      {isEditing ? "Reschedule From Month" : "Deduction Start Month"}
                     </Label>
                     <Select
                       id="advance-start"
@@ -678,21 +703,26 @@ export default function SalaryAdvancesPage() {
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <Label>{isEditing ? "Updated repayment schedule" : "Repayment schedule"}</Label>
+                  <Label>{isEditing ? "Updated Repayment Schedule" : "Repayment Schedule"}</Label>
                   <Button
                     type="button"
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={saving}
+                    className="shrink-0"
                     onClick={() =>
-                      setSegments((prev) => [...prev, { months: "1", amountPerMonth: "5000" }])
+                      setSegments((prev) => [...prev, { ...DEFAULT_SCHEDULE_SEGMENT }])
                     }
                   >
-                    Add segment
+                    <Plus className="size-3.5" aria-hidden />
+                    Add Segment
                   </Button>
                 </div>
                 {segments.map((segment, index) => (
-                  <div key={`segment-${index}`} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                  <div
+                    key={`segment-${index}`}
+                    className="border-ex-border bg-ex-surface/30 grid gap-3 rounded-xl border p-3 sm:grid-cols-[1fr_1fr_auto]"
+                  >
                     <div className="space-y-1">
                       <Label htmlFor={`seg-months-${index}`}>Months</Label>
                       <Input
@@ -712,7 +742,7 @@ export default function SalaryAdvancesPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor={`seg-amount-${index}`}>Amount / month (Rs.)</Label>
+                      <Label htmlFor={`seg-amount-${index}`}>Amount / Month (Rs.)</Label>
                       <Input
                         id={`seg-amount-${index}`}
                         type="number"
@@ -733,20 +763,23 @@ export default function SalaryAdvancesPage() {
                       <Button
                         type="button"
                         size="sm"
-                        variant="outline"
+                        variant="ghost"
                         disabled={saving || segments.length <= 1}
+                        className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+                        aria-label={`Remove segment ${index + 1}`}
                         onClick={() => setSegments((prev) => prev.filter((_, i) => i !== index))}
                       >
+                        <Trash2 className="size-3.5" aria-hidden />
                         Remove
                       </Button>
                     </div>
                   </div>
                 ))}
                 <p className="text-ex-muted text-xs">
-                  Schedule total:{" "}
+                  Schedule Total:{" "}
                   <span className="text-ex-primary font-medium">{formatInr(scheduleTotal)}</span>
                   {scheduleTarget > 0
-                    ? ` · Must equal ${formatInr(scheduleTarget)}${isEditing ? " remaining" : ""}`
+                    ? ` · Must equal ${formatInr(scheduleTarget)}${isEditing ? " Remaining" : ""}`
                     : null}
                   .
                 </p>
@@ -754,7 +787,7 @@ export default function SalaryAdvancesPage() {
 
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" size="sm" disabled={saving}>
-                  {saving ? "Saving…" : isEditing ? "Update schedule" : "Save advance"}
+                  {saving ? "Saving…" : isEditing ? "Update Schedule" : "Save Advance"}
                 </Button>
                 {isEditing ? (
                   <Button
@@ -780,11 +813,14 @@ export default function SalaryAdvancesPage() {
         <h2 className="text-ex-primary text-base font-semibold">Active & Past Advances</h2>
         <DataTable
           columns={columns}
-          rows={tableRows}
+          rows={pagedRows}
           loading={loading}
-          emptyTitle="No salary advances"
+          emptyTitle="No Salary Advances"
           emptyDescription="Create an advance to recover it automatically from monthly payroll."
         />
+        {!loading ? (
+          <Pagination pagination={pagination} onPageChange={setPage} itemLabel="Advances" />
+        ) : null}
       </div>
     </div>
   );

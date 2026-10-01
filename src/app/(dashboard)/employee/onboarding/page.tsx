@@ -124,95 +124,127 @@ export default function OnboardingPage() {
     <div className="space-y-8">
       <PageHeader
         title="On Boarding & Off Boarding"
-        description="Checklists, asset assignments, and exit interviews. Hook these steps to Google Drive document packs and Slack channels."
-        actions={
-          <Link href="/employee/new">
-            <Button size="sm">
-              <UserPlus className="size-4" />
-              Add
-            </Button>
-          </Link>
-        }
+        description="Add new hires to the roster, or offboard employees with last working day and exit notes."
       />
-      <Card className="max-w-xl">
-        <CardHeader>
-          <CardTitle>Off Boarding</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="offboard-employee">Employee</Label>
-            <Select
-              id="offboard-employee"
-              value={selectedEmployee}
-              onChange={(e) => setSelectedEmployee(e.target.value)}
-              disabled={isBusy}
-            >
-              <option value="" disabled>
-                {loading ? "Loading employees…" : "Select"}
-              </option>
-              {activeEmployees.map((employee) => (
-                <option key={employee.sheetRow} value={employee.sheetRow}>
-                  {formatEmployeeOptionLabel(employee.name, employee.employeeId, employee.role)}
+
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        <Card className="overflow-hidden">
+          <CardHeader className="bg-ex-surface/40">
+            <div className="flex items-start gap-3">
+              <div className="bg-ex-secondary/15 text-ex-secondary flex size-11 shrink-0 items-center justify-center rounded-xl">
+                <UserPlus className="size-5" aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <CardTitle>On Boarding</CardTitle>
+                <p className="text-ex-muted mt-1 text-sm leading-relaxed">
+                  Create a new employee profile with role, documents, and joining details.
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-ex-muted text-sm">
+              Opens the employee form to add someone to the active roster.
+            </p>
+            <Link href="/employee/new" className="shrink-0 self-start sm:self-auto">
+              <Button size="md" type="button">
+                <UserPlus className="size-4" aria-hidden />
+                Add Employee
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <CardHeader className="bg-ex-surface/40">
+            <div className="flex items-start gap-3">
+              <div className="bg-ex-chip-danger-bg text-ex-chip-danger-fg flex size-11 shrink-0 items-center justify-center rounded-xl">
+                <UserMinus className="size-5" aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <CardTitle>Off Boarding</CardTitle>
+                <p className="text-ex-muted mt-1 text-sm leading-relaxed">
+                  Mark an employee inactive with last working day and exit reason.
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-5">
+            <div className="space-y-2">
+              <Label htmlFor="offboard-employee">Employee</Label>
+              <Select
+                id="offboard-employee"
+                value={selectedEmployee}
+                onChange={(e) => setSelectedEmployee(e.target.value)}
+                disabled={isBusy}
+              >
+                <option value="" disabled>
+                  {loading ? "Loading employees…" : "Select"}
                 </option>
-              ))}
-              {inactiveEmployees.length > 0 ? (
-                <optgroup label="Inactive">
-                  {inactiveEmployees.map((employee) => (
-                    <option
-                      key={employee.sheetRow}
-                      value={employee.sheetRow}
-                      disabled
-                      title="This user is inactive"
-                    >
-                      {formatEmployeeOptionLabel(
-                        employee.name,
-                        employee.employeeId,
-                        employee.role,
-                      )}{" "}
-                    </option>
-                  ))}
-                </optgroup>
+                {activeEmployees.map((employee) => (
+                  <option key={employee.sheetRow} value={employee.sheetRow}>
+                    {formatEmployeeOptionLabel(employee.name, employee.employeeId, employee.role)}
+                  </option>
+                ))}
+                {inactiveEmployees.length > 0 ? (
+                  <optgroup label="Inactive">
+                    {inactiveEmployees.map((employee) => (
+                      <option
+                        key={employee.sheetRow}
+                        value={employee.sheetRow}
+                        disabled
+                        title="This user is inactive"
+                      >
+                        {formatEmployeeOptionLabel(
+                          employee.name,
+                          employee.employeeId,
+                          employee.role,
+                        )}{" "}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </Select>
+              {!loading && employees.length === 0 ? (
+                <p className="text-ex-muted text-sm">No employees found.</p>
               ) : null}
-            </Select>
-            {!loading && employees.length === 0 ? (
-              <p className="text-ex-muted text-sm">No employees found.</p>
-            ) : null}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="last-working-day">Last working day</Label>
-            <DateInput
-              id="last-working-day"
-              value={lastWorkingDay}
-              onChange={setLastWorkingDay}
-              minDate={todayIsoDate()}
-              maxYear={new Date().getFullYear() + 1}
-              disabled={isBusy}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="offboard-reason">Reason</Label>
-            <Textarea
-              id="offboard-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Reason for leaving, handover notes, etc."
-              rows={4}
-              disabled={isBusy}
-              required
-            />
-          </div>
-          <Button
-            type="button"
-            className="w-full sm:w-auto"
-            disabled={isBusy || activeEmployees.length === 0}
-            onClick={() => void handleOffboard()}
-          >
-            <UserMinus className="size-4" />
-            {offboarding ? "Offboarding…" : "Off board"}
-          </Button>
-        </CardContent>
-      </Card>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="last-working-day">Last working day</Label>
+              <DateInput
+                id="last-working-day"
+                value={lastWorkingDay}
+                onChange={setLastWorkingDay}
+                minDate={todayIsoDate()}
+                maxYear={new Date().getFullYear() + 1}
+                disabled={isBusy}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="offboard-reason">Reason</Label>
+              <Textarea
+                id="offboard-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Reason for leaving, handover notes, etc."
+                rows={4}
+                disabled={isBusy}
+                required
+              />
+            </div>
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              disabled={isBusy || activeEmployees.length === 0}
+              onClick={() => void handleOffboard()}
+            >
+              <UserMinus className="size-4" aria-hidden />
+              {offboarding ? "Offboarding…" : "Off board"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -81,7 +81,7 @@ export function MonthYearPicker({
   disabled = false,
   id,
   className,
-  label = "Period",
+  label = "Time",
   hideLabel = false,
   allowAll = false,
   allowAllMonths = false,
@@ -178,7 +178,7 @@ export function MonthYearPicker({
           <div
             ref={panelRef}
             role="dialog"
-            aria-label="Choose month and year"
+            aria-label="Choose Month and Year"
             style={{
               position: "fixed",
               top: panelPos.top,
@@ -191,7 +191,7 @@ export function MonthYearPicker({
             <div className="mb-3 flex items-center justify-between gap-2">
               <button
                 type="button"
-                aria-label="Previous year"
+                aria-label="Previous Year"
                 disabled={!canGoPrev}
                 onClick={() => setViewYear((y) => Math.max(minYear, y - 1))}
                 className="text-ex-primary hover:bg-ex-surface inline-flex size-8 items-center justify-center rounded-lg disabled:pointer-events-none disabled:opacity-40"
@@ -201,7 +201,7 @@ export function MonthYearPicker({
               <p className="text-ex-primary text-sm font-semibold tabular-nums">{viewYear}</p>
               <button
                 type="button"
-                aria-label="Next year"
+                aria-label="Next Year"
                 disabled={!canGoNext}
                 onClick={() => setViewYear((y) => Math.min(maxYear, y + 1))}
                 className="text-ex-primary hover:bg-ex-surface inline-flex size-8 items-center justify-center rounded-lg disabled:pointer-events-none disabled:opacity-40"
@@ -255,7 +255,7 @@ export function MonthYearPicker({
                         "bg-ex-secondary hover:bg-ex-secondary text-white",
                     )}
                   >
-                    All periods
+                    All Periods
                   </button>
                 ) : null}
                 <button
@@ -271,7 +271,7 @@ export function MonthYearPicker({
                       "bg-ex-secondary hover:bg-ex-secondary text-white",
                   )}
                 >
-                  All months in {viewYear}
+                  All Months in {viewYear}
                 </button>
               </div>
             ) : null}

@@ -1,6 +1,6 @@
 "use client";
 
-import { MonitorSmartphone, Pencil, Search } from "lucide-react";
+import { ArrowLeft, MonitorSmartphone, Pencil, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { SystemSpecsForm } from "@/components/system-specs/system-specs-form";
@@ -332,7 +332,8 @@ export default function SystemSpecsAdminPage() {
                 setForm(emptySystemSpecsForm());
               }}
             >
-              Back to list
+              <ArrowLeft className="size-4" />
+              Back to List
             </Button>
           </CardHeader>
           <CardContent>
@@ -341,7 +342,7 @@ export default function SystemSpecsAdminPage() {
               onChange={setForm}
               onSubmit={onSubmit}
               saving={saving}
-              submitLabel="Save specifications"
+              submitLabel="Save Specifications"
             />
           </CardContent>
         </Card>
@@ -350,13 +351,13 @@ export default function SystemSpecsAdminPage() {
           <CardHeader className="flex flex-col gap-4 space-y-0 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <MonitorSmartphone className="text-ex-secondary size-5" />
-              <CardTitle>All employees</CardTitle>
+              <CardTitle>All Employees</CardTitle>
             </div>
             <div className="relative w-full sm:max-w-xs">
               <Search className="text-ex-muted pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
               <Input
                 className="pl-9"
-                placeholder="Search employee…"
+                placeholder="Search Employee…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -367,8 +368,8 @@ export default function SystemSpecsAdminPage() {
               columns={columns}
               rows={tableRows}
               loading={loading}
-              emptyTitle="No employees found"
-              emptyDescription="Active employees will appear here once loaded."
+              emptyTitle="No Employees Found"
+              emptyDescription="Active Employees Will Appear Here Once Loaded."
             />
           </CardContent>
         </Card>

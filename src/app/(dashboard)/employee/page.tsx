@@ -131,7 +131,7 @@ export default function EmployeeDirectoryPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(STATUS.ACTIVE);
   const [pagination, setPagination] = useState<SheetPagination>(emptyPagination);
   const [reloadKey, setReloadKey] = useState(0);
 

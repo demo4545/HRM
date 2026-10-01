@@ -96,7 +96,7 @@ export default function AnnouncementsPage() {
       .catch((loadError: unknown) => {
         if (!cancelled) {
           pushToast({
-            title: "Couldn’t load announcements",
+            title: "Couldn’t Load Announcements",
             body: toUserFacingFetchError(loadError),
             variant: "error",
           });
@@ -137,7 +137,7 @@ export default function AnnouncementsPage() {
   const saveAnnouncement = async () => {
     if (!title.trim() || !message.trim()) {
       pushToast({
-        title: "Missing details",
+        title: "Missing Details",
         body: "Title and message are required.",
         variant: "error",
       });
@@ -145,7 +145,7 @@ export default function AnnouncementsPage() {
     }
     if (!expiresAt.trim()) {
       pushToast({
-        title: "Expiry date required",
+        title: "Expiry Date Required",
         body: "Choose a visible-until end date.",
         variant: "error",
       });
@@ -184,14 +184,14 @@ export default function AnnouncementsPage() {
           current.map((row) => (row.id === data.announcement!.id ? data.announcement! : row)),
         );
         pushToast({
-          title: "Announcement updated",
+          title: "Announcement Updated",
           body: "Changes are saved on the dashboard and in employee notifications.",
           variant: "success",
         });
       } else {
         setAnnouncements((current) => [data.announcement!, ...current]);
         pushToast({
-          title: "Announcement published",
+          title: "Announcement Published",
           body: `Sent to ${data.announcement.recipientCount} active employee${data.announcement.recipientCount === 1 ? "" : "s"}.`,
           variant: "success",
         });
@@ -199,7 +199,7 @@ export default function AnnouncementsPage() {
       resetComposeForm();
     } catch (saveError) {
       pushToast({
-        title: editingId ? "Update failed" : "Publish failed",
+        title: editingId ? "Update Failed" : "Publish Failed",
         body: toUserFacingActionError(saveError),
         variant: "error",
       });
@@ -232,14 +232,14 @@ export default function AnnouncementsPage() {
         resetComposeForm();
       }
       pushToast({
-        title: "Announcement deleted",
+        title: "Announcement Deleted",
         body: `"${pendingDelete.title}" was removed.`,
         variant: "success",
       });
       setPendingDelete(null);
     } catch (deleteError) {
       pushToast({
-        title: "Delete failed",
+        title: "Delete Failed",
         body: toUserFacingActionError(deleteError),
         variant: "error",
       });
@@ -250,14 +250,11 @@ export default function AnnouncementsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Notice / Announcement"
-        description="Publish, edit, or delete office leave notices and general messages. Only HR and Super Admin can manage announcements."
-      />
+      <PageHeader title="Social Announcements"/>
 
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>{editingId ? "Edit announcement" : "Compose announcement"}</CardTitle>
+          <CardTitle>{editingId ? "Edit Announcement" : "Compose Announcement"}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
@@ -265,19 +262,18 @@ export default function AnnouncementsPage() {
             <Input
               value={title}
               maxLength={120}
-              placeholder="Office closed, policy update, team meeting…"
               onChange={(event) => setTitle(event.target.value)}
             />
           </div>
           <div className="space-y-2">
-            <Label>Notice type</Label>
+            <Label>Notice Type</Label>
             <Select
               value={category}
               onChange={(event) => setCategory(event.target.value as AnnouncementCategory)}
             >
-              <option value="general">General message</option>
-              <option value="office_leave">Office leave</option>
-              <option value="important">Important notice</option>
+              <option value="general">General Message</option>
+              <option value="office_leave">Office Leave</option>
+              <option value="important">Important Notice</option>
             </Select>
           </div>
           <div className="space-y-2">
@@ -285,7 +281,7 @@ export default function AnnouncementsPage() {
             <Input value="All active employees (incl. HR & Super Admin)" disabled />
           </div>
           <div className="space-y-2">
-            <Label>Visible until (end date)</Label>
+            <Label>Visible Until (End Date)</Label>
             <Input
               type="date"
               value={expiresAt}
@@ -305,7 +301,6 @@ export default function AnnouncementsPage() {
               rows={6}
               value={message}
               maxLength={2000}
-              placeholder="Write the announcement employees should receive…"
               onChange={(event) => setMessage(event.target.value)}
             />
           </div>
@@ -322,8 +317,8 @@ export default function AnnouncementsPage() {
                   ? "Saving…"
                   : "Publishing…"
                 : editingId
-                  ? "Save changes"
-                  : "Publish to all employees"}
+                  ? "Save Changes"
+                  : "Publish To All Employees"}
             </Button>
             {editingId ? (
               <Button
@@ -332,7 +327,7 @@ export default function AnnouncementsPage() {
                 disabled={publishing}
                 onClick={() => resetComposeForm()}
               >
-                Cancel edit
+                Cancel Edit
               </Button>
             ) : null}
           </div>
@@ -341,14 +336,14 @@ export default function AnnouncementsPage() {
 
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>Published announcements</CardTitle>
+          <CardTitle>Published Announcements</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <p className="text-ex-muted px-5 py-8 text-sm">Loading announcement history…</p>
+            <p className="text-ex-muted px-5 py-8 text-sm">Loading Announcement History…</p>
           ) : announcements.length === 0 ? (
             <div className="px-5 py-10 text-center">
-              <p className="text-ex-primary font-medium">No announcements published</p>
+              <p className="text-ex-primary font-medium">No Announcements Published</p>
               <p className="text-ex-muted mt-1 text-sm">
                 Published notices will appear here for HR and Super Admin.
               </p>
@@ -372,14 +367,14 @@ export default function AnnouncementsPage() {
                       </div>
                       <p className="text-ex-muted mt-1 text-xs">
                         Published by {announcement.authorName || "Manager"} ·{" "}
-                        {new Date(announcement.createdAt).toLocaleString()} · Visible until{" "}
+                        {new Date(announcement.createdAt).toLocaleString()} · Visible Until{" "}
                         {formatDate(announcement.expiresAt)}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="accent">
-                        {announcement.recipientCount} recipient
-                        {announcement.recipientCount === 1 ? "" : "s"}
+                        {announcement.recipientCount} Recipient
+                        {announcement.recipientCount <= 1 ? "" : "s"}
                       </Badge>
                       {!isExpired(announcement.expiresAt) ? (
                         <Button
@@ -414,7 +409,7 @@ export default function AnnouncementsPage() {
 
       <ConfirmationDialog
         open={Boolean(pendingDelete)}
-        title="Delete announcement?"
+        title="Delete Announcement?"
         description={
           pendingDelete ? (
             <>

@@ -121,7 +121,7 @@ export default function EmployeeProfilePage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Employee Profile"
+        title="Profile"
         description={
           isEditing
             ? "Update your details and save changes."
@@ -142,6 +142,7 @@ export default function EmployeeProfilePage() {
       ) : (
         <EmployeeProfileView
           form={form}
+          loadOwnSpecs
           showAccountSettings
           hasPassword={hasPassword}
           onEdit={sheetRow ? () => setIsEditing(true) : undefined}

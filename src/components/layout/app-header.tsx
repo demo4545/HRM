@@ -4,14 +4,14 @@ import { readResponseJson } from "@/lib/api/read-response-json";
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Bell, LogOut, User } from "lucide-react";
+import { Bell, LogOut, Palette, User } from "lucide-react";
 import { useAuth } from "@/contexts/auth-provider";
 import { useNotificationsOptional } from "@/contexts/notifications-provider";
 import { PunchInStatusFlag } from "@/components/attendance/punch-in-status-flag";
 import { UnreadBadge } from "@/components/notifications/unread-badge";
 import { MobileDrawer } from "@/components/layout/app-sidebar";
 import { ROLES } from "@/app/consts/common";
-import { roleCanPunchInOut } from "@/lib/auth/roles";
+import { canManageCompanyBranding, roleCanPunchInOut } from "@/lib/auth/roles";
 import { resolveProfileImageSrc, sheetRowToForm } from "@/lib/employee";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +21,15 @@ const roleLabel: Record<string, string> = {
   [ROLES.EMPLOYEE]: "Employee",
 };
 
-function HeaderProfileAvatar({ userName, onLogout }: { userName?: string; onLogout: () => void }) {
+function HeaderProfileAvatar({
+  userName,
+  showBranding = false,
+  onLogout,
+}: {
+  userName?: string;
+  showBranding?: boolean;
+  onLogout: () => void;
+}) {
   const [src, setSrc] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -109,7 +117,7 @@ function HeaderProfileAvatar({ userName, onLogout }: { userName?: string; onLogo
       {open ? (
         <div
           role="menu"
-          className="border-ex-border bg-ex-elevated absolute top-full right-0 z-50 mt-2 min-w-40 overflow-hidden rounded-lg border py-1 shadow-lg"
+          className="border-ex-border bg-ex-elevated absolute top-full right-0 z-50 mt-2 min-w-48 overflow-hidden rounded-lg border py-1 shadow-lg"
         >
           <Link
             href="/employee/profile"
@@ -120,6 +128,17 @@ function HeaderProfileAvatar({ userName, onLogout }: { userName?: string; onLogo
             <User className="size-4" />
             Profile
           </Link>
+          {showBranding ? (
+            <Link
+              href="/settings/branding"
+              role="menuitem"
+              className={menuItemClass}
+              onClick={() => setOpen(false)}
+            >
+              <Palette className="size-4" />
+              Company Branding
+            </Link>
+          ) : null}
           <button
             type="button"
             role="menuitem"
@@ -170,7 +189,11 @@ export function AppHeader() {
             {user?.role ? (roleLabel[user.role] ?? user.role) : ""}
           </p>
         </div>
-        <HeaderProfileAvatar userName={user?.name} onLogout={() => void logout()} />
+        <HeaderProfileAvatar
+          userName={user?.name}
+          showBranding={user ? canManageCompanyBranding(user.role) : false}
+          onLogout={() => void logout()}
+        />
       </div>
     </header>
   );

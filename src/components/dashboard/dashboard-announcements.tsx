@@ -24,7 +24,7 @@ type DashboardAnnouncement = {
 const DASHBOARD_ANNOUNCEMENT_LIMIT = 1;
 
 function categoryLabel(category: AnnouncementCategory): string {
-  if (category === "office_leave") return "Office leave";
+  if (category === "office_leave") return "Office Leave";
   if (category === "important") return "Important";
   return "General";
 }
@@ -53,7 +53,16 @@ function normalizeMessage(value: string): string {
     .trim();
 }
 
-export function DashboardAnnouncements({ className }: { className?: string }) {
+export function DashboardAnnouncements({
+  className,
+  loading: externalLoading,
+  onLoadingChange,
+}: {
+  className?: string;
+  /** When true, keep the skeleton even if this section already finished fetching. */
+  loading?: boolean;
+  onLoadingChange?: (loading: boolean) => void;
+}) {
   const { user } = useAuth();
   const canManage = user ? canManageEmployees(user.role) : false;
   const [announcements, setAnnouncements] = useState<DashboardAnnouncement[]>([]);
@@ -61,6 +70,7 @@ export function DashboardAnnouncements({ className }: { className?: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    onLoadingChange?.(true);
     void fetch(`/api/announcements?limit=${DASHBOARD_ANNOUNCEMENT_LIMIT}&activeOnly=1`, {
       cache: "no-store",
       credentials: "include",
@@ -84,18 +94,21 @@ export function DashboardAnnouncements({ className }: { className?: string }) {
         setAnnouncements([]);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (cancelled) return;
+        setLoading(false);
+        onLoadingChange?.(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onLoadingChange]);
 
   const items = announcements;
   const viewAllHref = canManage ? "/notifications/announcements" : "/notifications";
+  const showLoading = externalLoading || loading;
 
-  if (loading) {
+  if (showLoading) {
     return (
       <div
         className={cn(
@@ -117,21 +130,21 @@ export function DashboardAnnouncements({ className }: { className?: string }) {
       >
         <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
-            Company announcements
+            Company Announcements
           </p>
           {canManage ? (
             <Link
               href="/notifications/announcements"
               className="text-ex-secondary text-xs font-medium underline-offset-2 hover:underline"
             >
-              Publish
+              Create Announcement
             </Link>
           ) : (
             <Link
               href={viewAllHref}
               className="text-ex-secondary text-xs font-medium underline-offset-2 hover:underline"
             >
-              View all
+              View All
             </Link>
           )}
         </div>
@@ -140,7 +153,7 @@ export function DashboardAnnouncements({ className }: { className?: string }) {
             <Megaphone className="size-4" aria-hidden />
           </div>
           <div className="min-w-0">
-            <p className="text-ex-primary text-sm font-medium">No announcements</p>
+            <p className="text-ex-primary text-sm font-medium">No Announcements</p>
             <p className="text-ex-muted mt-0.5 text-xs leading-snug">
               {canManage
                 ? "No active notices. Publish one when you need to reach the team."
@@ -161,13 +174,13 @@ export function DashboardAnnouncements({ className }: { className?: string }) {
     >
       <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
         <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
-          Company announcements
+          Company Announcements
         </p>
         <Link
           href={viewAllHref}
           className="text-ex-secondary text-xs font-medium underline-offset-2 hover:underline"
         >
-          View all
+          View All
         </Link>
       </div>
 

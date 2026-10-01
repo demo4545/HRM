@@ -35,7 +35,6 @@ export default function EditEmployeePage() {
     <div className="space-y-8">
       <PageHeader
         title="Edit Employee"
-        description="Update employee details in the directory."
         actions={
           <Link href="/employee">
             <Button variant="outline" size="sm">

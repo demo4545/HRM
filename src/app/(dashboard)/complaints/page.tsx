@@ -164,7 +164,7 @@ export default function ComplaintsPage() {
       setSeverity("normal");
       setDetails("");
       pushToast({
-        title: "Complaint submitted",
+        title: "Complaint Submitted",
         body: "Your complaint was sent to HR and Super Admin for review.",
         href: "/complaints",
         variant: "success",
@@ -244,7 +244,7 @@ export default function ComplaintsPage() {
       {!canReview ? (
         <Card>
           <CardHeader>
-            <CardTitle>Submit a complaint</CardTitle>
+            <CardTitle>Submit Complaint</CardTitle>
             <p className="text-ex-muted mt-1 text-sm">
               HR and Super Admin will be notified after submission.
             </p>
@@ -315,9 +315,9 @@ export default function ComplaintsPage() {
       <Card className="overflow-hidden">
         <CardHeader className="bg-ex-surface/40 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle>{canReview ? "Complaint review queue" : "My complaints"}</CardTitle>
+            <CardTitle>{canReview ? "Complaint Review Queue" : "My Complaints"}</CardTitle>
             <p className="text-ex-muted mt-1 text-sm">
-              {canReview ? `${pendingCount} complaints awaiting action` : "Your submission history"}
+              {canReview ? `${pendingCount} Complaints Awaiting Action` : "Your Submission History"}
             </p>
           </div>
           <div className="bg-ex-elevated flex w-fit rounded-lg p-1">
@@ -340,11 +340,11 @@ export default function ComplaintsPage() {
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <p className="text-ex-muted px-5 py-10 text-sm">Loading complaints…</p>
+            <p className="text-ex-muted px-5 py-10 text-sm">Loading Complaints…</p>
           ) : visibleComplaints.length === 0 ? (
             <div className="px-5 py-14 text-center">
               <MessageSquareWarning className="text-ex-muted/50 mx-auto size-8" />
-              <p className="mt-3 font-medium">No {statusFilter.toLowerCase()} complaints</p>
+              <p className="mt-3 font-medium">No {statusFilter.toLowerCase()} Complaints</p>
               <p className="text-ex-muted mt-1 text-sm">
                 Complaints matching this status will appear here.
               </p>

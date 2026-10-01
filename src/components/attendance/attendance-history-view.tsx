@@ -9,6 +9,7 @@ import {
   TrendingDown,
   TrendingUp,
   Upload,
+  UserRound,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -278,32 +279,31 @@ export function AttendanceHistoryView({
           <div>
             <div className="text-ex-muted flex items-center gap-2">
               <CalendarDays className="size-4" aria-hidden />
-              <span className="text-sm font-medium">Attendance history</span>
+              <span className="text-sm font-medium">Attendance History</span>
             </div>
             <h1 className="text-ex-primary mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-              {monthLabel && year != null ? `${monthLabel} ${year}` : "Your attendance"}
+              {monthLabel && year != null ? `${monthLabel} ${year}` : "Your Attendance"}
             </h1>
-            <p className="text-ex-muted mt-1 max-w-xl text-sm">
-              {isHr
-                ? "Review punch times, work hours, and daily updates. Import legacy CSV when needed."
-                : `Monthly log of punch in/out, break, daily updates, and ${IDEAL_WORKING_HOURS}h work target.`}
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {isHr ? (
-              <Badge
-                variant="default"
-                className="max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap"
+              <div
+                className="border-ex-border bg-ex-elevated/90 flex max-w-[280px] items-center gap-2 rounded-lg border px-2.5 py-1.5"
                 title={
                   selectedEmployee
-                    ? `Target: ${selectedEmployee.name}${selectedEmployee.employeeId ? ` (${selectedEmployee.employeeId})` : ""}`
-                    : "Target: Select employee"
+                    ? `Viewing attendance for ${selectedEmployee.name}${selectedEmployee.employeeId ? ` (${selectedEmployee.employeeId})` : ""}`
+                    : "Select an employee to view attendance"
                 }
               >
-                {selectedEmployee
-                  ? `Target: ${selectedEmployee.name}${selectedEmployee.employeeId ? ` (${selectedEmployee.employeeId})` : ""}`
-                  : "Target: Select employee"}
-              </Badge>
+                <span className="bg-ex-secondary/15 text-ex-secondary flex size-5 shrink-0 items-center justify-center rounded-full">
+                  <UserRound className="size-3.5" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-ex-primary truncate text-sm font-medium">
+                    {selectedEmployee?.name?.trim() || "Select an employee"}
+                  </p>
+                </div>
+              </div>
             ) : null}
             {isHr ? (
               <Button
@@ -319,7 +319,7 @@ export function AttendanceHistoryView({
                 }
               >
                 <Plus className="size-4" />
-                Add attendance
+                Add Attendance
               </Button>
             ) : null}
             {isHr ? (
@@ -375,7 +375,6 @@ export function AttendanceHistoryView({
                 {employees.map((emp) => (
                   <option key={emp.sheetRow} value={emp.sheetRow}>
                     {emp.name}
-                    {emp.employeeId ? ` · ${emp.employeeId}` : ""}
                   </option>
                 ))}
               </Select>
@@ -418,21 +417,21 @@ export function AttendanceHistoryView({
 
       {!loading && rows.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Days logged" value={String(summary.total)} hint="This month" />
+          <StatCard label="Days Logged" value={String(summary.total)} hint="This Month" />
           <StatCard
             label="Completed"
             value={String(summary.completed)}
-            hint={`${IDEAL_WORKING_HOURS}h target met`}
+            hint={`${IDEAL_WORKING_HOURS}h Target Met`}
           />
           <StatCard
-            label="Approved overtime"
+            label="Approved Overtime"
             value={summary.approvedOvertime}
-            hint="Accepted this month"
+            hint="Accepted This Month"
           />
           <StatCard
-            label="OT approved days"
+            label="OT Approved Days"
             value={String(summary.overtimeApproved)}
-            hint="Rows approved"
+            hint="Rows Approved"
           />
         </div>
       ) : null}
@@ -479,14 +478,7 @@ export function AttendanceHistoryView({
           sortOrder={sortOrder}
           onSort={handleSort}
           className="rounded-2xl"
-          emptyTitle="No attendance records"
-          emptyDescription={
-            rows.length === 0
-              ? isHr
-                ? "Import a legacy CSV (Date, Work Mode, In Time, Out Time) or choose another month."
-                : "Punch in to build your history, or select a month with data."
-              : "No rows match this filter."
-          }
+          emptyTitle="No Attendance Records"
           emptyAction={
             isHr && rows.length === 0 ? (
               <Button variant="outline" className="gap-2" onClick={onImportClick}>
@@ -504,7 +496,7 @@ export function AttendanceHistoryView({
             },
             {
               key: "workMode",
-              header: "Work mode",
+              header: "Work Mode",
               sortable: true,
               className: "min-w-[150px] whitespace-normal",
               render: (r) => r.workMode?.trim() || <span className="text-ex-muted">—</span>,
@@ -535,7 +527,7 @@ export function AttendanceHistoryView({
             },
             {
               key: "overtime",
-              header: "Extra / short",
+              header: "Extra / Short",
               sortable: true,
               render: (r) => formatOvertimeCell(r),
             },
@@ -549,7 +541,7 @@ export function AttendanceHistoryView({
             },
             {
               key: "earlyLeaveReason",
-              header: "Early leave reason",
+              header: "Early Leave Reason",
               sortable: false,
               className: "min-w-[150px] max-w-[220px] whitespace-normal",
               render: (r) =>

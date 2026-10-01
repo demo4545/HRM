@@ -30,7 +30,7 @@ export function SkillsChipsInput({
   value,
   onChange,
   suggestions,
-  placeholder = "New tag…",
+  placeholder = "New Tag…",
   disabled = false,
   className,
 }: SkillsChipsInputProps) {
@@ -129,7 +129,7 @@ export function SkillsChipsInput({
         })}
 
         {sortedSuggestions.length === 0 ? (
-          <p className="text-ex-muted text-xs">No existing skills found.</p>
+          <p className="text-ex-muted text-xs">No Existing Skills Found.</p>
         ) : null}
       </div>
 

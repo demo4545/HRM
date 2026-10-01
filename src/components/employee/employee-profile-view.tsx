@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLink, Pencil, User } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ExternalLink, Monitor, Pencil, User } from "lucide-react";
 import Image from "next/image";
 
 import { ROLES } from "@/app/consts/common";
@@ -11,9 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { normalizeDateValue } from "@/components/ui/date-input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ProfileAccountSettings } from "@/components/employee/profile-account-settings";
 import { useAuth } from "@/contexts/auth-provider";
 import { canManageEmployees } from "@/lib/auth/roles";
+import { readResponseJson } from "@/lib/api/read-response-json";
 import {
   getDocumentDisplayName,
   getDocumentHref,
@@ -26,6 +29,12 @@ import {
   type EmployeeDocumentField,
   type EmployeeFormState,
 } from "@/lib/employee";
+import {
+  DEVICE_FIELDS,
+  compactDeviceList,
+  compactLoginList,
+  type SystemSpecsRecord,
+} from "@/lib/system-specs/types";
 
 function formatRole(role: string): string {
   if (!role) return "—";
@@ -101,8 +110,163 @@ function ReadOnlyField({
   );
 }
 
+function formatDeviceLine(device: { name: string; serialNumber: string }): string {
+  const name = device.name.trim();
+  const serial = device.serialNumber.trim();
+  if (name && serial) return `${name} · ${serial}`;
+  return name || serial;
+}
+
+function SpecSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="border-ex-border space-y-1 border-b py-2 last:border-b-0 last:pb-0 first:pt-0">
+      <p className="text-ex-muted text-xs font-medium">{label}</p>
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
+
+function SystemSpecsCard({
+  employeeSheetRow,
+  loadOwnSpecs = false,
+}: {
+  employeeSheetRow?: number | null;
+  loadOwnSpecs?: boolean;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [specs, setSpecs] = useState<SystemSpecsRecord | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const url = loadOwnSpecs
+          ? "/api/system-specs?me=1"
+          : `/api/system-specs?sheetRow=${employeeSheetRow}`;
+        const res = await fetch(url, { credentials: "include", cache: "no-store" });
+        const json = await readResponseJson<{
+          success?: boolean;
+          specs?: SystemSpecsRecord | null;
+        }>(res, "fetch");
+        if (cancelled) return;
+        setSpecs(json.success ? (json.specs ?? null) : null);
+      } catch {
+        if (!cancelled) setSpecs(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [employeeSheetRow, loadOwnSpecs]);
+
+  const deviceSections = specs
+    ? [
+        ...DEVICE_FIELDS.map((device) => ({
+          key: device.key,
+          label: device.label,
+          items: compactDeviceList(specs[device.key]),
+        })),
+        { key: "screen", label: "Screen", items: compactDeviceList(specs.screen) },
+      ].filter((section) => section.items.length > 0)
+    : [];
+
+  const ramValue = specs?.ramGb?.trim() ? `${specs.ramGb.trim()} GB` : "";
+  const logins = specs ? compactLoginList(specs.logins) : [];
+  const hasContent = deviceSections.length > 0 || Boolean(ramValue) || logins.length > 0;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <Monitor className="text-ex-secondary size-4" aria-hidden />
+          <CardTitle>System Specifications</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="space-y-3" aria-busy aria-label="Loading system specifications">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="space-y-1.5">
+                <Skeleton className="h-3 w-16 rounded-md" />
+                <Skeleton className="h-4 w-full rounded-md" />
+              </div>
+            ))}
+          </div>
+        ) : !specs || !hasContent ? (
+          <p className="text-ex-muted text-sm">No system specifications submitted yet.</p>
+        ) : (
+          <div>
+            {deviceSections.map((section) => (
+              <SpecSection key={section.key} label={section.label}>
+                {section.items.map((item, index) => (
+                  <p key={`${section.key}-${index}`} className="text-ex-primary text-sm leading-snug wrap-break-word">
+                    {section.items.length > 1 ? (
+                      <span className="text-ex-muted mr-1.5">{index + 1}.</span>
+                    ) : null}
+                    {formatDeviceLine(item)}
+                  </p>
+                ))}
+              </SpecSection>
+            ))}
+
+            {(ramValue || logins.length > 0) && (
+              <div
+                className={
+                  deviceSections.length > 0
+                    ? "border-ex-border space-y-1.5 border-t pt-2"
+                    : "space-y-1.5"
+                }
+              >
+                {ramValue ? (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-ex-muted w-14 shrink-0 text-xs font-medium">RAM</span>
+                    <span className="text-ex-primary text-sm">{ramValue}</span>
+                  </div>
+                ) : null}
+
+                {logins.map((login, index) => {
+                  const user = login.username.trim() || "—";
+                  const pass = login.password.trim() || "—";
+                  const label =
+                    logins.length > 1 ? `Login ${index + 1}` : "Login";
+                  return (
+                    <div key={`login-${index}`} className="flex items-baseline gap-2">
+                      <span className="text-ex-muted w-14 shrink-0 text-xs font-medium">
+                        {label}
+                      </span>
+                      <span className="text-ex-primary min-w-0 text-sm leading-snug break-all">
+                        {user}
+                        <span className="text-ex-muted mx-1.5">·</span>
+                        {pass}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export type EmployeeProfileViewProps = {
   form: EmployeeFormState;
+  /** Sheet row used to load this employee&apos;s system specs (HR/admin view). */
+  employeeSheetRow?: number | null;
+  /** Load specs for the signed-in employee via /api/system-specs?me=1. */
+  loadOwnSpecs?: boolean;
   /** Show sign-in username and password settings (own profile only). */
   showAccountSettings?: boolean;
   hasPassword?: boolean;
@@ -112,6 +276,8 @@ export type EmployeeProfileViewProps = {
 
 export function EmployeeProfileView({
   form,
+  employeeSheetRow = null,
+  loadOwnSpecs = false,
   showAccountSettings = false,
   hasPassword: initialHasPassword = false,
   onEdit,
@@ -127,6 +293,8 @@ export function EmployeeProfileView({
     position: form.position,
     role: form.role,
   });
+  const showSystemSpecs =
+    loadOwnSpecs || (employeeSheetRow != null && employeeSheetRow >= 2 && canManage);
 
   return (
     <div className="grid gap-4 xl:grid-cols-3">
@@ -134,11 +302,11 @@ export function EmployeeProfileView({
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
-              <CardTitle>Core details</CardTitle>
+              <CardTitle>Core Details</CardTitle>
               {onEdit ? (
                 <Button variant="outline" size="sm" type="button" onClick={onEdit}>
                   <Pencil className="size-4" />
-                  Edit profile
+                  Edit Profile
                 </Button>
               ) : null}
             </div>
@@ -164,7 +332,6 @@ export function EmployeeProfileView({
               )}
               <div className="text-center">
                 <p className="text-ex-primary text-lg font-semibold">{form.name || "—"}</p>
-                <p className="text-ex-muted text-sm">{form.employeeId || "—"}</p>
               </div>
             </div>
 
@@ -173,12 +340,13 @@ export function EmployeeProfileView({
             <ReadOnlyField label="Contact" value={formatPhone(form.contactNumber)} />
             <ReadOnlyField label="Role" value={formatRole(form.role)} />
             <ReadOnlyField label="Position" value={formatPosition(form.position)} />
+            <ReadOnlyField label="Birthday" value={formatDate(form.birthdayDate)} />
 
             {isInactive ? (
               <>
                 <ReadOnlyField label="Last working day" value={formatDate(form.lastWorkingDay)} />
                 <div className="space-y-2 sm:col-span-2">
-                  <Label>Offboard reason</Label>
+                  <Label>Offboard Reason</Label>
                   <Textarea
                     value={form.offboardReason || "—"}
                     readOnly
@@ -201,15 +369,14 @@ export function EmployeeProfileView({
               />
             </div>
 
-            <ReadOnlyField label="Birthday" value={formatDate(form.birthdayDate)} />
             {!hideEmploymentFields ? (
               <>
-                <ReadOnlyField label="Joining date" value={formatDate(form.joiningDate)} />
-                <ReadOnlyField label="Last increment" value={formatDate(form.lastIncrementDate)} />
-                <ReadOnlyField label="Experience (years)" value={form.experience || "—"} />
+                <ReadOnlyField label="Joining Date" value={formatDate(form.joiningDate)} />
+                <ReadOnlyField label="Last Increment" value={formatDate(form.lastIncrementDate)} />
+                <ReadOnlyField label="Experience (Years)" value={form.experience || "—"} />
                 {canManage ? (
                   <ReadOnlyField
-                    label="Salary (monthly)"
+                    label="Salary (Monthly)"
                     value={form.salary?.trim() ? form.salary : "—"}
                   />
                 ) : null}
@@ -218,8 +385,8 @@ export function EmployeeProfileView({
 
             <ReadOnlyField label="PAN" value={maskPan(form.panNumber)} />
             <ReadOnlyField label="Aadhaar" value={maskAadhar(form.aadharNumber)} />
-            <ReadOnlyField label="Bank account" value={form.bankAccountNumber || "—"} />
-            <ReadOnlyField label="IFSC code" value={form.ifscCode || "—"} />
+            <ReadOnlyField label="Bank Account" value={form.bankAccountNumber || "—"} />
+            <ReadOnlyField label="IFSC Code" value={form.ifscCode || "—"} />
           </CardContent>
         </Card>
 
@@ -235,11 +402,11 @@ export function EmployeeProfileView({
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Family</CardTitle>
+            <CardTitle>Emergency Contact</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <ReadOnlyField label="Parent / guardian" value={form.parentName || "—"} />
-            <ReadOnlyField label="Guardian contact" value={formatPhone(form.parentContact)} />
+            <ReadOnlyField label="Contact Name" value={form.parentName || "—"} />
+            <ReadOnlyField label="Contact Number" value={formatPhone(form.parentContact)} />
             <ReadOnlyField
               label="Relationship"
               value={formatParentRelationshipLabel(form.parentDetails) || "—"}
@@ -267,10 +434,14 @@ export function EmployeeProfileView({
           </Card>
         ) : null}
 
+        {showSystemSpecs ? (
+          <SystemSpecsCard employeeSheetRow={employeeSheetRow} loadOwnSpecs={loadOwnSpecs} />
+        ) : null}
+
         {showDocuments ? (
           <Card>
             <CardHeader>
-              <CardTitle>Documents on file</CardTitle>
+              <CardTitle>Documents</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <DocumentFileRow label="PAN card" field="pancard" storedValue={form.pancard} />

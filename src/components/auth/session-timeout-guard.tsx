@@ -171,11 +171,11 @@ export function SessionTimeoutGuard({
       aria-live="polite"
       className="border-ex-border bg-ex-elevated fixed right-4 bottom-4 z-100 max-w-sm rounded-xl border p-4 shadow-xl"
     >
-      <p className="text-ex-text text-sm font-medium">Session ending soon</p>
+      <p className="text-ex-text text-sm font-medium">Session Ending Soon</p>
       <p className="text-ex-muted mt-1 text-sm">
         You will be signed out in <span className="text-ex-text font-medium">{countdown}</span>
         {isIdleWarning
-          ? " due to inactivity."
+          ? " Due to Inactivity."
           : `. Sessions last ${sessionLabel} from login${showContinue ? " (or last Continue)" : ""}.`}{" "}
         Any work already saved stays in the system.
       </p>
@@ -191,7 +191,7 @@ export function SessionTimeoutGuard({
           </Button>
         ) : null}
         <Button type="button" variant="outline" size="sm" onClick={() => void onLogout()}>
-          Sign out now
+          Sign Out Now
         </Button>
       </div>
     </div>
