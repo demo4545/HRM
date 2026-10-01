@@ -19,6 +19,7 @@ import { Select } from "@/components/ui/select";
 import { StatCard } from "@/components/ui/stat-card";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/auth-provider";
+import { useNotifications } from "@/contexts/notifications-provider";
 import { readResponseJson } from "@/lib/api/read-response-json";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { canManageEmployees } from "@/lib/auth/roles";
@@ -119,6 +120,7 @@ function statusVariant(status: ExpenseStatus): "warning" | "success" | "danger" 
 
 export default function ExpensesPage() {
   const { user, loading: authLoading } = useAuth();
+  const { pushToast } = useNotifications();
   const canManage = user ? canManageEmployees(user.role) : false;
 
   const now = useMemo(() => new Date(), []);
@@ -136,7 +138,6 @@ export default function ExpensesPage() {
   const [summary, setSummary] = useState<ExpenseSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingMarkPaid, setPendingMarkPaid] = useState<ExpenseRecord | null>(null);
@@ -194,7 +195,6 @@ export default function ExpensesPage() {
   const loadExpenses = useCallback(async () => {
     if (!canManage) return;
     setLoading(true);
-    setError(null);
     try {
       const params = new URLSearchParams({
         type: typeFilter,
@@ -219,11 +219,15 @@ export default function ExpensesPage() {
     } catch (err) {
       setExpenses([]);
       setSummary(EMPTY_SUMMARY);
-      setError(toUserFacingFetchError(err));
+      pushToast({
+        title: "Could not load expenses",
+        body: toUserFacingFetchError(err),
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }, [canManage, typeFilter, year, month]);
+  }, [canManage, typeFilter, year, month, pushToast]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch expenses when filters change
@@ -264,7 +268,6 @@ export default function ExpensesPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
-    setError(null);
 
     const resolvedCategory =
       category === "Other" && customCategory.trim() ? customCategory.trim() : category;
@@ -298,9 +301,20 @@ export default function ExpensesPage() {
       }
       setShowForm(false);
       resetForm();
+      pushToast({
+        title: editingId ? "Expense Updated" : "Expense Created",
+        body: editingId
+          ? "The expense was updated successfully."
+          : "The expense was created successfully.",
+        variant: "success",
+      });
       await loadExpenses();
     } catch (err) {
-      setError(toUserFacingActionError(err instanceof Error ? err : "Failed to save expense"));
+      pushToast({
+        title: editingId ? "Update Failed" : "Create Failed",
+        body: toUserFacingActionError(err instanceof Error ? err : "Failed to save expense"),
+        variant: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -308,7 +322,6 @@ export default function ExpensesPage() {
 
   async function handleMarkPaid(expense: ExpenseRecord) {
     setSaving(true);
-    setError(null);
     try {
       const res = await fetch("/api/expenses", {
         method: "PATCH",
@@ -325,11 +338,20 @@ export default function ExpensesPage() {
         throw new Error(json.message ?? "Failed to mark expense as paid");
       }
       setPendingMarkPaid(null);
+      pushToast({
+        title: "Marked as Paid",
+        body: "The expense was marked as paid.",
+        variant: "success",
+      });
       await loadExpenses();
     } catch (err) {
-      setError(
-        toUserFacingActionError(err instanceof Error ? err : "Failed to mark expense as paid"),
-      );
+      pushToast({
+        title: "Mark Paid Failed",
+        body: toUserFacingActionError(
+          err instanceof Error ? err : "Failed to mark expense as paid",
+        ),
+        variant: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -340,12 +362,15 @@ export default function ExpensesPage() {
     if (!rejectingExpense) return;
     const reason = rejectionReason.trim();
     if (!reason) {
-      setError("Rejection reason is required.");
+      pushToast({
+        title: "Rejection Reason Required",
+        body: "Please enter a reason before rejecting this expense.",
+        variant: "error",
+      });
       return;
     }
 
     setSaving(true);
-    setError(null);
     try {
       const res = await fetch("/api/expenses", {
         method: "PATCH",
@@ -368,9 +393,18 @@ export default function ExpensesPage() {
       }
       setRejectingExpense(null);
       setRejectionReason("");
+      pushToast({
+        title: "Expense Rejected",
+        body: "The expense was rejected.",
+        variant: "success",
+      });
       await loadExpenses();
     } catch (err) {
-      setError(toUserFacingActionError(err instanceof Error ? err : "Failed to reject expense"));
+      pushToast({
+        title: "Reject Failed",
+        body: toUserFacingActionError(err instanceof Error ? err : "Failed to reject expense"),
+        variant: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -440,7 +474,6 @@ export default function ExpensesPage() {
                 disabled={saving}
                 onClick={() => {
                   setPendingMarkPaid(expense);
-                  setError(null);
                 }}
               >
                 <CheckCircle2 className="size-4" />
@@ -464,7 +497,6 @@ export default function ExpensesPage() {
                 onClick={() => {
                   setRejectingExpense(expense);
                   setRejectionReason("");
-                  setError(null);
                 }}
               >
                 <XCircle className="size-4" />
@@ -515,15 +547,6 @@ export default function ExpensesPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
-              variant="outline"
-              size="md"
-              onClick={() => void loadExpenses()}
-              disabled={loading || saving}
-            >
-              <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            <Button
               size="md"
               onClick={() => {
                 if (showForm) {
@@ -537,17 +560,20 @@ export default function ExpensesPage() {
               disabled={saving}
             >
               {showForm ? <X className="size-4" /> : <Plus className="size-4" />}
-              {showForm ? "Close Form" : "Add Expense"}
+              {showForm ? "Close Form" : "Add Expenses"}
+            </Button>
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => void loadExpenses()}
+              disabled={loading || saving}
+            >
+              <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
             </Button>
           </div>
         }
       />
-
-      {error ? (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
-          {error}
-        </div>
-      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         {(
@@ -575,7 +601,7 @@ export default function ExpensesPage() {
           periods={periods}
           allowAllMonths
           hideLabel
-          label="Period"
+          label="Time"
           className="w-36"
           onChange={handleFilterPeriodChange}
         />
@@ -583,24 +609,24 @@ export default function ExpensesPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Period"
+          label="Time"
           value={periodLabel}
-          hint={`${summary.pendingCount} pending · ${summary.paidCount} paid`}
+          hint={`${summary.pendingCount} Pending · ${summary.paidCount} Paid`}
         />
         <StatCard
           label="Total Paid"
           value={formatInr(summary.totalPaid)}
-          hint="Settled expenses only"
+          hint="Settled Expenses Only"
         />
         <StatCard
-          label="Default total"
+          label="Default Total"
           value={formatInr(summary.defaultTotal)}
-          hint="Pending default expenses"
+          hint="Pending Default Expenses"
         />
         <StatCard
-          label="Recurring total"
+          label="Recurring Total"
           value={formatInr(summary.recurringTotal)}
-          hint="Pending recurring expenses"
+          hint="Pending Recurring Expenses"
         />
       </div>
 
@@ -608,26 +634,25 @@ export default function ExpensesPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              Reject expense — {rejectingExpense.title} ({formatInr(rejectingExpense.amount)})
+              Reject Expense — {rejectingExpense.title} ({formatInr(rejectingExpense.amount)})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={(e) => void handleRejectSubmit(e)} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="rejection-reason">Rejection reason</Label>
+                <Label htmlFor="rejection-reason">Rejection Reason</Label>
                 <Textarea
                   id="rejection-reason"
                   required
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
-                  placeholder="Why is this expense being rejected?"
                   disabled={saving}
                   rows={3}
                 />
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" variant="danger" disabled={saving}>
-                  {saving ? "Rejecting…" : "Confirm reject"}
+                  {saving ? "Rejecting…" : "Confirm Reject"}
                 </Button>
                 <Button
                   type="button"
@@ -650,14 +675,14 @@ export default function ExpensesPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {editingId ? "Edit expense" : "Add expense"}
+              {editingId ? "Edit Expense" : "Add Expense"}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="expense-type">Type</Label>
+                  <Label htmlFor="expense-type">Expense Type</Label>
                   <Select
                     id="expense-type"
                     value={formType}
@@ -708,17 +733,12 @@ export default function ExpensesPage() {
 
               {category === "Other" ? (
                 <div className="space-y-2">
-                  <Label htmlFor="expense-custom-category">Custom category</Label>
+                  <Label htmlFor="expense-custom-category">Custom Category</Label>
                   <Input
                     id="expense-custom-category"
                     required
                     value={customCategory}
                     onChange={(e) => setCustomCategory(e.target.value)}
-                    placeholder={
-                      formType === EXPENSE_TYPES.DEFAULT
-                        ? "e.g. Water bill, Internet"
-                        : "e.g. Cleaning service"
-                    }
                     disabled={saving}
                   />
                 </div>
@@ -732,7 +752,6 @@ export default function ExpensesPage() {
                     required
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. electricity bill"
                     disabled={saving}
                   />
                 </div>
@@ -798,7 +817,7 @@ export default function ExpensesPage() {
 
               {formType === EXPENSE_TYPES.DEFAULT ? (
                 <div className="space-y-2">
-                  <Label htmlFor="expense-due-date">Due date</Label>
+                  <Label htmlFor="expense-due-date">Due Date</Label>
                   <DateInput
                     id="expense-due-date"
                     required
@@ -817,7 +836,7 @@ export default function ExpensesPage() {
               ) : null}
 
               <div className="space-y-2">
-                <Label htmlFor="expense-payment-mode">Payment mode</Label>
+                <Label htmlFor="expense-payment-mode">Payment Mode</Label>
                 <Select
                   id="expense-payment-mode"
                   value={paymentMode}
@@ -839,7 +858,6 @@ export default function ExpensesPage() {
                   id="expense-notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Vendor, invoice number, payment mode…"
                   disabled={saving}
                   rows={3}
                 />
@@ -847,7 +865,7 @@ export default function ExpensesPage() {
 
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={saving}>
-                  {saving ? "Saving…" : editingId ? "Update expense" : "Save expense"}
+                  {saving ? "Saving…" : editingId ? "Update Expense" : "Save Expense"}
                 </Button>
                 <Button
                   type="button"
@@ -868,14 +886,14 @@ export default function ExpensesPage() {
 
       <Card>
         <CardHeader className="border-0 pb-0">
-          <CardTitle className={cn("text-ex-secondary text-base")}>Expense list</CardTitle>
+          <CardTitle className={cn("text-ex-secondary text-base")}>Expense List</CardTitle>
         </CardHeader>
         <CardContent>
           <DataTable
             columns={columns}
             rows={tableRows}
             loading={loading}
-            emptyTitle="No expenses found"
+            emptyTitle="No Expenses Found"
             emptyDescription="No expenses match this type, month, and year filter."
           />
         </CardContent>
@@ -883,7 +901,7 @@ export default function ExpensesPage() {
 
       <ConfirmationDialog
         open={Boolean(pendingMarkPaid)}
-        title="Mark expense as paid?"
+        title="Mark Expense as Paid?"
         description={
           pendingMarkPaid ? (
             <>
@@ -894,7 +912,7 @@ export default function ExpensesPage() {
             ""
           )
         }
-        confirmText="Mark paid"
+        confirmText="Mark Paid"
         confirmVariant="primary"
         busy={saving}
         busyText="Marking…"

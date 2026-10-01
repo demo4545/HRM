@@ -14,7 +14,14 @@ import { formatDuration } from "@/lib/attendance/time";
 import { useTodayAttendance } from "@/hooks/use-today-attendance";
 import { cn } from "@/lib/utils";
 
-export function AttendanceWidget({ className }: { className?: string }) {
+export function AttendanceWidget({
+  className,
+  loading: externalLoading,
+}: {
+  className?: string;
+  /** When true, keep the loader even if attendance already finished fetching. */
+  loading?: boolean;
+}) {
   const { user } = useAuth();
   const { today, loading, liveWorkedMs, liveBreakUsedMs } = useTodayAttendance();
 
@@ -23,6 +30,7 @@ export function AttendanceWidget({ className }: { className?: string }) {
   }
 
   const remainingMs = Math.max(0, IDEAL_WORKING_HOURS * 60 * 60 * 1000 - liveWorkedMs);
+  const showLoading = externalLoading || loading;
 
   return (
     <Card className={cn("flex flex-col overflow-hidden", className)}>
@@ -32,7 +40,7 @@ export function AttendanceWidget({ className }: { className?: string }) {
             <Clock className="size-5" />
           </div>
           <div className="min-w-0">
-            <CardTitle>Today&apos;s attendance</CardTitle>
+            <CardTitle>Today&apos;s Attendance</CardTitle>
             <p className="text-ex-muted mt-0.5 text-sm">Punch status and worked hours</p>
           </div>
         </div>
@@ -43,7 +51,7 @@ export function AttendanceWidget({ className }: { className?: string }) {
         </Link>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col p-5">
-        {loading ? (
+        {showLoading ? (
           <p className="text-ex-muted text-sm">Loading attendance…</p>
         ) : !today?.hasPunchedIn ? (
           <PunchInBanner />
@@ -59,11 +67,11 @@ export function AttendanceWidget({ className }: { className?: string }) {
                 <dd className="text-ex-primary font-medium">{today.onBreak ? "Yes" : "No"}</dd>
               </div>
               <div>
-                <dt className="text-ex-muted">Work goal</dt>
+                <dt className="text-ex-muted">Work Goal</dt>
                 <dd className="text-ex-primary font-medium">{IDEAL_WORKING_HOURS}h</dd>
               </div>
               <div>
-                <dt className="text-ex-muted">Work left</dt>
+                <dt className="text-ex-muted">Work Left</dt>
                 <dd className="text-ex-primary font-medium">
                   {today.hasPunchedOut ? "—" : formatDuration(remainingMs)}
                 </dd>

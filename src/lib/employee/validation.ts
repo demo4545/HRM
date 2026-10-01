@@ -86,6 +86,22 @@ export function sanitizePersonNameInput(raw: string): string {
     .replace(/^[ .'-]+/, "");
 }
 
+/** Split a stored full name into first + remaining last parts for the form UI. */
+export function splitPersonName(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0]!, lastName: "" };
+  return { firstName: parts[0]!, lastName: parts.slice(1).join(" ") };
+}
+
+/** Combine first / last name inputs into the stored full-name field. */
+export function joinPersonName(firstName: string, lastName: string): string {
+  return [firstName, lastName]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
 function lettersOnly(word: string): string {
   return word.replace(/[^A-Za-z]/g, "").toLowerCase();
 }
@@ -172,7 +188,7 @@ export function addressError(value: string): string | null {
 export function parentDetailsError(value: string): string | null {
   const normalized = value.trim().toLowerCase();
   if (!normalized) {
-    return "Please select a parent / guardian relationship.";
+    return "Please select a relationship.";
   }
   if (!(PARENT_RELATIONSHIP_OPTIONS as readonly string[]).includes(normalized)) {
     return "Please select a valid relationship.";
@@ -531,13 +547,13 @@ export function validateEmployeeForm(
     errors.ifscCode = `Enter a valid ${IFSC_CODE_LENGTH}-character IFSC code, or leave blank.`;
   }
 
-  const parentNameErr = personNameError(form.parentName, "Parent / guardian name");
+  const parentNameErr = personNameError(form.parentName, "Contact name");
   if (parentNameErr) {
     errors.parentName = parentNameErr;
   }
 
   if (!form.parentContact.trim()) {
-    errors.parentContact = "Parent / guardian contact is required.";
+    errors.parentContact = "Contact number is required.";
   } else if (!isValidIndianMobile(form.parentContact)) {
     errors.parentContact = "Enter a valid 10-digit Indian mobile number.";
   } else if (
@@ -545,9 +561,9 @@ export function validateEmployeeForm(
     parseIndianMobileDigits(form.contactNumber) === parseIndianMobileDigits(form.parentContact)
   ) {
     errors.parentContact =
-      "Parent / guardian contact must be different from the employee contact number.";
+      "Emergency contact number must be different from the employee contact number.";
     errors.contactNumber =
-      "Employee contact number must be different from the parent / guardian contact.";
+      "Employee contact number must be different from the emergency contact number.";
   }
 
   const parentDetailsErr = parentDetailsError(form.parentDetails);

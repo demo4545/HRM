@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { DataTable } from "@/components/ui/data-table";
+import { DEFAULT_PAGE_SIZE, Pagination } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-provider";
@@ -18,6 +19,7 @@ import {
 import { canReviewOvertime, canReviewOvertimeRequest } from "@/lib/auth/roles";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { ROLES } from "@/app/consts/common";
+import type { SheetPagination } from "@/types/sheet";
 
 function statusVariant(status: OvertimeRequestDto["status"]) {
   if (status === "Approved") return "success" as const;
@@ -42,6 +44,7 @@ export default function OvertimePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const [pendingReview, setPendingReview] = useState<{
     row: OvertimeRequestDto;
     status: "Approved" | "Rejected" | "Cancelled";
@@ -105,14 +108,31 @@ export default function OvertimePage() {
 
   const pendingCount = useMemo(() => rows.filter((r) => r.status === "Pending").length, [rows]);
 
+  const totalPages = Math.max(1, Math.ceil(rows.length / DEFAULT_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+
+  const pagination = useMemo<SheetPagination>(
+    () => ({
+      page: safePage,
+      pageSize: DEFAULT_PAGE_SIZE,
+      total: rows.length,
+      totalPages,
+    }),
+    [safePage, rows.length, totalPages],
+  );
+
+  const pagedRows = useMemo(() => {
+    const start = (safePage - 1) * DEFAULT_PAGE_SIZE;
+    return rows.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [safePage, rows]);
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="Overtime Approvals"
-        description="Employee-submitted OT can be accepted or rejected by HR or Super Admin. OT submitted by HR is reviewed by Super Admin only. Approved OT can later be cancelled so it is not paid."
         actions={
           <div className="flex items-center gap-2">
-            <Badge variant={pendingCount > 0 ? "warning" : "default"}>{pendingCount} pending</Badge>
+            {pendingCount > 0 && <Badge variant="warning">{pendingCount} Pending</Badge>}
             <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
               Refresh
@@ -126,14 +146,11 @@ export default function OvertimePage() {
         </p>
       ) : null}
       <Card>
-        <CardHeader>
-          <CardTitle>Queue</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="space-y-4 p-0 pb-4">
           <DataTable
             loading={loading}
             className="rounded-none border-0 shadow-none"
-            rows={rows}
+            rows={pagedRows}
             columns={[
               {
                 key: "employeeName",
@@ -149,14 +166,14 @@ export default function OvertimePage() {
               { key: "overtime", header: "OT" },
               {
                 key: "requestedByRole",
-                header: "Submitted by",
+                header: "Submitted By",
                 render: (r) => (
                   <span className="text-ex-muted text-sm">{submittedByLabel(r.requestedByRole)}</span>
                 ),
               },
               {
                 key: "comment",
-                header: "Employee note",
+                header: "Employee Note",
                 render: (r) =>
                   r.comment?.trim() ? (
                     <span className="text-ex-muted line-clamp-2 text-sm" title={r.comment}>
@@ -168,12 +185,12 @@ export default function OvertimePage() {
               },
               {
                 key: "status",
-                header: "State",
+                header: "Status",
                 render: (r) => <Badge variant={statusVariant(r.status)}>{r.status}</Badge>,
               },
               {
                 key: "remarks",
-                header: "Review remarks",
+                header: "Review Remarks",
                 render: (r) =>
                   r.remarks?.trim() ? r.remarks : <span className="text-ex-muted">—</span>,
               },
@@ -183,13 +200,13 @@ export default function OvertimePage() {
                 sticky: "right",
                 render: (r) => {
                   if (!canSeeActions) {
-                    return <span className="text-ex-muted">View only</span>;
+                    return <span className="text-ex-muted">View Only</span>;
                   }
                   if (!canDecideRow(r)) {
                     return (
                       <span className="text-ex-muted">
                         {r.status === "Pending" || r.status === "Approved"
-                          ? "Super Admin only"
+                          ? "Super Admin Only"
                           : "Reviewed"}
                       </span>
                     );
@@ -207,7 +224,7 @@ export default function OvertimePage() {
                           setPendingReview({ row: r, status: "Cancelled" });
                         }}
                       >
-                        {actingId === r.id ? "Saving..." : "Cancel approval"}
+                        {actingId === r.id ? "Saving..." : "Cancel Approval"}
                       </Button>
                     );
                   }
@@ -245,6 +262,14 @@ export default function OvertimePage() {
               },
             ]}
           />
+          {!loading ? (
+            <Pagination
+              className="px-4"
+              pagination={pagination}
+              onPageChange={setPage}
+              itemLabel="requests"
+            />
+          ) : null}
         </CardContent>
       </Card>
 
@@ -252,10 +277,10 @@ export default function OvertimePage() {
         open={Boolean(pendingReview)}
         title={
           pendingReview?.status === "Cancelled"
-            ? "Cancel overtime approval?"
+            ? "Cancel Overtime Approval?"
             : pendingReview?.status === "Rejected"
-              ? "Reject overtime request?"
-              : "Approve overtime?"
+              ? "Reject Overtime Request?"
+              : "Approve Overtime?"
         }
         description={
           pendingReview ? (
@@ -279,7 +304,7 @@ export default function OvertimePage() {
         }
         confirmText={
           pendingReview?.status === "Cancelled"
-            ? "Cancel approval"
+            ? "Cancel Approval"
             : pendingReview?.status === "Rejected"
               ? "Reject"
               : "Approve"
@@ -294,10 +319,10 @@ export default function OvertimePage() {
         }
         inputLabel={
           pendingReview?.status === "Cancelled"
-            ? "Cancellation remarks (required)"
+            ? "Cancellation Remarks (required)"
             : pendingReview?.status === "Rejected"
-              ? "Rejection remarks (required)"
-              : "Approval remarks (optional)"
+              ? "Rejection Remarks (required)"
+              : "Approval Remarks (optional)"
         }
         inputValue={reviewRemarks}
         onInputChange={setReviewRemarks}

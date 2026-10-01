@@ -6,6 +6,7 @@ import { SystemSpecsForm } from "@/components/system-specs/system-specs-form";
 import { AccessDenied } from "@/components/ui/access-denied";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/auth-provider";
 import { useNotifications } from "@/contexts/notifications-provider";
 import { ROLES } from "@/app/consts/common";
@@ -18,6 +19,55 @@ import {
   type SystemSpecsRecord,
 } from "@/lib/system-specs/types";
 
+function SystemSpecsFormSkeleton() {
+  return (
+    <div className="space-y-6" aria-busy aria-live="polite" aria-label="Loading specifications">
+      <div className="grid gap-5 sm:grid-cols-2">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={index} className="border-ex-border space-y-3 rounded-xl border p-4">
+            <div className="flex items-center justify-between gap-2">
+              <Skeleton className="h-4 w-24 rounded-md" />
+              <Skeleton className="h-8 w-16 rounded-lg" />
+            </div>
+            <div className="border-ex-border space-y-3 rounded-lg border border-dashed p-3">
+              <Skeleton className="h-3 w-20 rounded-md" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-12 rounded-md" />
+                <Skeleton className="h-10 w-full rounded-lg" />
+              </div>
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-24 rounded-md" />
+                <Skeleton className="h-10 w-full rounded-lg" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-ex-border space-y-4 rounded-xl border p-4">
+        <div className="flex items-center justify-between gap-2">
+          <Skeleton className="h-4 w-36 rounded-md" />
+          <Skeleton className="h-8 w-16 rounded-lg" />
+        </div>
+        <div className="border-ex-border space-y-3 rounded-lg border border-dashed p-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Skeleton className="h-3 w-16 rounded-md" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+            </div>
+            <div className="space-y-1.5">
+              <Skeleton className="h-3 w-20 rounded-md" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Skeleton className="h-10 w-44 rounded-lg" />
+    </div>
+  );
+}
+
 export default function EmployeeSystemSpecsPage() {
   const { user, loading: authLoading } = useAuth();
   const { pushToast } = useNotifications();
@@ -25,14 +75,12 @@ export default function EmployeeSystemSpecsPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<SystemSpecsFormState>(emptySystemSpecsForm());
   const [hasExisting, setHasExisting] = useState(false);
 
   const loadOwn = useCallback(async () => {
     if (!user || isSuperAdmin) return;
     setLoading(true);
-    setError(null);
     try {
       const res = await fetch("/api/system-specs?me=1", {
         credentials: "include",
@@ -52,11 +100,15 @@ export default function EmployeeSystemSpecsPage() {
       setForm(recordToFormState(json.specs ?? null));
       setHasExisting(Boolean(json.specs));
     } catch (err) {
-      setError(toUserFacingFetchError(err));
+      pushToast({
+        title: "Could Not Load Specifications",
+        body: toUserFacingFetchError(err),
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }, [user, isSuperAdmin]);
+  }, [user, isSuperAdmin, pushToast]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load
@@ -66,7 +118,6 @@ export default function EmployeeSystemSpecsPage() {
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
-    setError(null);
     try {
       const res = await fetch("/api/system-specs", {
         method: "PUT",
@@ -85,14 +136,14 @@ export default function EmployeeSystemSpecsPage() {
       setForm(recordToFormState(json.specs));
       setHasExisting(true);
       pushToast({
-        title: "Specifications saved",
+        title: "Specifications Saved",
         body: "Your system specifications were saved successfully.",
         variant: "success",
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       pushToast({
-        title: "Save failed",
+        title: "Save Failed",
         body: toUserFacingActionError(err),
         variant: "error",
       });
@@ -106,7 +157,7 @@ export default function EmployeeSystemSpecsPage() {
   if (!user) {
     return (
       <div className="space-y-6">
-        <PageHeader title="My System Specs" />
+        <PageHeader title="System Specifications" />
         <AccessDenied />
       </div>
     );
@@ -116,11 +167,11 @@ export default function EmployeeSystemSpecsPage() {
     return (
       <div className="space-y-6">
         <PageHeader
-          title="My System Specs"
+          title="System Specifications"
           description="Super Admin accounts are not required to submit system specifications."
         />
         <AccessDenied
-          title="Not required"
+          title="Not Required"
           description="Use Access Control → System Specifications to view or edit employee details."
         />
       </div>
@@ -130,30 +181,24 @@ export default function EmployeeSystemSpecsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="My System Specs"
+        title="System Specifications"
         description="Add or update your workstation hardware details and system login credentials."
       />
 
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {error}
-        </div>
-      ) : null}
-
       <Card>
         <CardHeader>
-          <CardTitle>{hasExisting ? "Edit your specifications" : "Add your specifications"}</CardTitle>
+          <CardTitle>{hasExisting ? "Edit Your Specifications" : "Add Your Specifications"}</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-ex-muted text-sm">Loading your specifications…</p>
+            <SystemSpecsFormSkeleton />
           ) : (
             <SystemSpecsForm
               value={form}
               onChange={setForm}
               onSubmit={onSubmit}
               saving={saving}
-              submitLabel={hasExisting ? "Update specifications" : "Save specifications"}
+              submitLabel={hasExisting ? "Update Specifications" : "Save Specifications"}
             />
           )}
         </CardContent>

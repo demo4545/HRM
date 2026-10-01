@@ -2,12 +2,12 @@
 
 import { readResponseJson } from "@/lib/api/read-response-json";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CalendarDays, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AccessDenied } from "@/components/ui/access-denied";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/auth-provider";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { useNotifications } from "@/contexts/notifications-provider";
 import { roleCanApplyLeave } from "@/lib/auth/roles";
+import { cn } from "@/lib/utils";
 
 type UnpaidLeaveEntry = {
   slot: string;
@@ -120,12 +121,36 @@ function getAvailableLeaveTypes(
   });
 }
 
+function BalanceRow({
+  title,
+  detail,
+  badge,
+  badgeVariant = "default",
+}: {
+  title: string;
+  detail: string;
+  badge: string;
+  badgeVariant?: "default" | "accent" | "success" | "warning" | "danger";
+}) {
+  return (
+    <div className="bg-ex-surface/60 border-ex-border flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5">
+      <div className="min-w-0 space-y-0.5">
+        <p className="text-ex-primary text-sm font-medium">{title}</p>
+        <p className="text-ex-muted text-xs leading-snug">{detail}</p>
+      </div>
+      <Badge variant={badgeVariant} className="shrink-0">
+        {badge}
+      </Badge>
+    </div>
+  );
+}
+
 export default function LeaveDeskPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const canApplyLeave = user ? roleCanApplyLeave(user.role) : false;
-  const { refresh: refreshNotifications } = useNotifications();
-  const [isSingleDay, setIsSingleDay] = useState(true);
+  const { refresh: refreshNotifications, pushToast } = useNotifications();
+  const [isSingleDay, setIsSingleDay] = useState(false);
 
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -139,7 +164,6 @@ export default function LeaveDeskPage() {
 
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [balances, setBalances] = useState<LeaveBalanceResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const formDisabled = balancesLoading || submitting;
 
@@ -164,19 +188,26 @@ export default function LeaveDeskPage() {
 
       if (data.success) {
         setBalances(data);
-        setError(null);
         if (data.birthdayDateIso) {
           setBirthdayLeaveDate((current) => current || data.birthdayDateIso || "");
         }
       } else {
-        setError(toUserFacingFetchError());
+        pushToast({
+          title: "Could not load leave balances",
+          body: toUserFacingFetchError(),
+          variant: "error",
+        });
       }
     } catch (error) {
-      setError(toUserFacingFetchError(error));
+      pushToast({
+        title: "Could not load leave balances",
+        body: toUserFacingFetchError(error),
+        variant: "error",
+      });
     } finally {
       setBalancesLoading(false);
     }
-  }, [canApplyLeave]);
+  }, [canApplyLeave, pushToast]);
 
   useEffect(() => {
     if (!authLoading && user && !canApplyLeave) {
@@ -193,7 +224,7 @@ export default function LeaveDeskPage() {
     return (
       <div className="mx-auto max-w-4xl space-y-6">
         <AccessDenied
-          title="Leave desk unavailable"
+          title="Leave Desk Unavailable"
           description="Leave applications are only available for Employee and HR Manager roles."
           action={
             <Link href="/dashboard">
@@ -209,20 +240,34 @@ export default function LeaveDeskPage() {
   }
 
   const minLeaveDate = formatIsoDate();
+  const isHalfDay = duration === "half_am" || duration === "half_pm";
 
   const handleSingleDayChange = (checked: boolean) => {
     setIsSingleDay(checked);
 
     if (checked) {
       setToDate(fromDate);
+      return;
     }
+
+    // Multi-day leave is always full day.
+    setDuration("full");
   };
 
   const handleFromDateChange = (value: string) => {
     setFromDate(value);
 
-    if (isSingleDay) {
+    if (isSingleDay || isHalfDay) {
       setToDate(value);
+    }
+  };
+
+  const handleDurationChange = (value: string) => {
+    setDuration(value);
+
+    if (value === "half_am" || value === "half_pm") {
+      setIsSingleDay(true);
+      setToDate(fromDate);
     }
   };
 
@@ -230,7 +275,7 @@ export default function LeaveDeskPage() {
     if (isBirthdayLeave) return 1;
     if (!fromDate) return 0;
 
-    const endDate = isSingleDay ? fromDate : toDate;
+    const endDate = isSingleDay || isHalfDay ? fromDate : toDate;
 
     if (!endDate) return 0;
 
@@ -243,35 +288,50 @@ export default function LeaveDeskPage() {
       return diff;
     }
 
-    return diff - 0.5;
+    return 0.5;
   })();
 
   const submitLeaveRequest = async () => {
     if (isBirthdayLeave) {
       if (!birthdayLeaveDateValue) {
-        setError("Please select your birthday leave date");
+        pushToast({
+          title: "Birthday Date Required",
+          body: "Please select your birthday leave date.",
+          variant: "error",
+        });
         return;
       }
     } else {
       if (!fromDate) {
-        setError("Please select a date");
+        pushToast({
+          title: "Date Required",
+          body: "Please select a date.",
+          variant: "error",
+        });
         return;
       }
 
-      if (!isSingleDay && !toDate) {
-        setError("Please select end date");
+      if (!isSingleDay && !isHalfDay && !toDate) {
+        pushToast({
+          title: "End Date Required",
+          body: "Please select an end date.",
+          variant: "error",
+        });
         return;
       }
 
       if (!reason.trim()) {
-        setError("Please provide a reason");
+        pushToast({
+          title: "Reason Required",
+          body: "Please provide a reason for leave.",
+          variant: "error",
+        });
         return;
       }
     }
 
     setSubmitting(true);
     setBalancesLoading(true);
-    setError(null);
 
     try {
       const body = isBirthdayLeave
@@ -280,7 +340,7 @@ export default function LeaveDeskPage() {
             leaveType: resolvedLeaveType,
             duration,
             fromDate,
-            toDate: isSingleDay ? fromDate : toDate,
+            toDate: isSingleDay || isHalfDay ? fromDate : toDate,
             totalDays,
             reason,
           };
@@ -310,11 +370,20 @@ export default function LeaveDeskPage() {
       setReason("");
       setLeaveType("paid");
       setDuration("full");
-      setIsSingleDay(true);
+      setIsSingleDay(false);
+      pushToast({
+        title: "Leave Submitted",
+        body: "Your leave request was submitted for approval.",
+        variant: "success",
+      });
       await loadBalances();
       await refreshNotifications();
     } catch (error) {
-      setError(toUserFacingActionError(error));
+      pushToast({
+        title: "Submit Failed",
+        body: toUserFacingActionError(error),
+        variant: "error",
+      });
     } finally {
       setSubmitting(false);
       setBalancesLoading(false);
@@ -324,81 +393,111 @@ export default function LeaveDeskPage() {
   const applications = balances?.applications ?? [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Leave Desk"
-        description="Apply for paid, sick, casual, birthday, or unpaid leave. Submitted requests show as Applied (pending approval) until HR accepts or rejects them."
+        description="Apply for leave and track balances. Requests stay Applied until HR accepts or rejects them."
       />
-      {error ? (
-        <p className="border-ex-banner-danger-border bg-ex-banner-danger-bg text-ex-banner-danger-fg rounded-xl border px-4 py-3 text-sm">
-          {error}
-        </p>
-      ) : null}
-      <div className="grid items-start gap-4 lg:grid-cols-3">
-        <Card className="h-fit lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Apply for Leave</CardTitle>
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <Card className="overflow-hidden lg:col-span-2">
+          <CardHeader className="bg-ex-surface/30">
+            <div className="flex items-start gap-3">
+              <div className="bg-ex-secondary/10 text-ex-secondary flex size-9 shrink-0 items-center justify-center rounded-lg">
+                <CalendarDays className="size-4" aria-hidden />
+              </div>
+              <div className="min-w-0 space-y-0.5">
+                <CardTitle>Apply For Leave</CardTitle>
+                <CardDescription>Choose a type, dates, and submit for approval.</CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Leave Type</Label>
+          <CardContent className="space-y-5 pt-5">
+            <div className={cn("grid gap-4", isSingleDay || isHalfDay ? "sm:grid-cols-2" : "")}>
+              <div className="space-y-2">
+                <Label>Leave Type</Label>
+                <Select
+                  value={resolvedLeaveType}
+                  onChange={(e) => setLeaveType(e.target.value)}
+                  disabled={formDisabled}
+                >
+                  {availableLeaveTypes.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                {!balancesLoading &&
+                balances &&
+                availableLeaveTypes.length < LEAVE_TYPE_OPTIONS.length ? (
+                  <p className="text-ex-muted text-xs">
+                    Leave types with no remaining balance are hidden from this list.
+                  </p>
+                ) : null}
+              </div>
 
-              <Select
-                value={resolvedLeaveType}
-                onChange={(e) => setLeaveType(e.target.value)}
-                disabled={formDisabled}
-              >
-                {availableLeaveTypes.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-              {!balancesLoading &&
-              balances &&
-              availableLeaveTypes.length < LEAVE_TYPE_OPTIONS.length ? (
-                <p className="text-ex-muted text-xs">
-                  Leave types with no remaining balance are hidden from this list.
-                </p>
+              {!isBirthdayLeave && (isSingleDay || isHalfDay) ? (
+                <div className="space-y-2">
+                  <Label>Duration</Label>
+                  <Select
+                    value={duration}
+                    onChange={(e) => handleDurationChange(e.target.value)}
+                    disabled={formDisabled}
+                  >
+                    <option value="full">Full Day</option>
+                    <option value="half_am">Half Day · Morning</option>
+                    <option value="half_pm">Half Day · Afternoon</option>
+                  </Select>
+                </div>
               ) : null}
             </div>
 
             {isBirthdayLeave ? (
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Birthday date</Label>
-                <Input
-                  type="date"
-                  min={minLeaveDate}
-                  value={birthdayLeaveDateValue}
-                  onChange={(e) => setBirthdayLeaveDate(e.target.value)}
-                  disabled={formDisabled}
-                />
-                <p className="text-ex-muted text-xs">
-                  {balances?.birthdayDateIso
-                    ? "Pre-filled from your employee profile. You can change it before submitting."
-                    : "Select your birthday leave date. No reason or duration is required."}
-                </p>
+              <div className="border-ex-border bg-ex-surface/40 space-y-3 rounded-xl border p-4">
+                <div className="space-y-2">
+                  <Label>Birthday Date</Label>
+                  <Input
+                    type="date"
+                    min={minLeaveDate}
+                    value={birthdayLeaveDateValue}
+                    onChange={(e) => setBirthdayLeaveDate(e.target.value)}
+                    disabled={formDisabled}
+                  />
+                  <p className="text-ex-muted text-xs">
+                    {balances?.birthdayDateIso
+                      ? "Pre-filled from your employee profile. You can change it before submitting."
+                      : "Select your birthday leave date. No reason or duration is required."}
+                  </p>
+                </div>
               </div>
             ) : (
               <>
-                <div className="space-y-2 sm:col-span-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Leave Dates</Label>
-
-                    <div className="flex items-center gap-2">
+                <div className="border-ex-border bg-ex-surface/40 space-y-4 rounded-xl border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-ex-primary text-sm font-medium">Leave Dates</p>
+                      <p className="text-ex-muted text-xs">
+                        {isSingleDay || isHalfDay
+                          ? "One calendar day"
+                          : "Select a from and to date range"}
+                      </p>
+                    </div>
+                    <label className="border-ex-border bg-ex-elevated flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5">
                       <Switch
                         checked={isSingleDay}
                         onCheckedChange={handleSingleDayChange}
                         disabled={formDisabled}
                       />
-                      <span className="text-sm">Single Day</span>
-                    </div>
+                      <span className="text-ex-primary text-xs font-medium">Single Day</span>
+                    </label>
                   </div>
 
-                  <div className={isSingleDay ? "grid gap-4" : "grid gap-4 sm:grid-cols-2"}>
+                  <div
+                    className={
+                      isSingleDay || isHalfDay ? "grid gap-4" : "grid gap-4 sm:grid-cols-2"
+                    }
+                  >
                     <div className="space-y-2">
-                      <Label>{isSingleDay ? "Date" : "From Date"}</Label>
-
+                      <Label>{isSingleDay || isHalfDay ? "Date" : "From Date"}</Label>
                       <Input
                         type="date"
                         min={minLeaveDate}
@@ -408,10 +507,9 @@ export default function LeaveDeskPage() {
                       />
                     </div>
 
-                    {!isSingleDay && (
+                    {!isSingleDay && !isHalfDay ? (
                       <div className="space-y-2">
                         <Label>To Date</Label>
-
                         <Input
                           type="date"
                           min={fromDate || minLeaveDate}
@@ -420,127 +518,106 @@ export default function LeaveDeskPage() {
                           disabled={formDisabled}
                         />
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Duration</Label>
-
-                  <Select
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    disabled={formDisabled}
-                  >
-                    <option value="full">Full Day</option>
-                    <option value="half_am">Half Day · Morning</option>
-                    <option value="half_pm">Half Day · Afternoon</option>
-                  </Select>
-                </div>
-
-                <div className="space-y-2 sm:col-span-2">
                   <Label>Reason</Label>
-
                   <Textarea
                     rows={3}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    placeholder="Reason for leave"
+                    placeholder="Reason For leave"
                     disabled={formDisabled}
                   />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <Badge variant="accent">
-                    Total Leave: {totalDays} day
-                    {totalDays !== 1 ? "s" : ""}
-                  </Badge>
                 </div>
               </>
             )}
 
-            <Button
-              className="w-fit sm:col-span-2"
-              onClick={submitLeaveRequest}
-              disabled={formDisabled || (isBirthdayLeave && !birthdayLeaveDateValue)}
-            >
-              {formDisabled ? (submitting ? "Submitting..." : "Loading...") : "Submit for Approval"}
-            </Button>
+            <div className="border-ex-border flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+              {!isBirthdayLeave ? (
+                <Badge variant="accent">
+                  Total Leave: {totalDays} Day
+                  {totalDays > 0 ? "s" : ""}
+                </Badge>
+              ) : (
+                <span className="text-ex-muted text-xs">Birthday leave counts as 1 day.</span>
+              )}
+              <Button
+                className="ml-auto w-fit"
+                onClick={submitLeaveRequest}
+                disabled={formDisabled || (isBirthdayLeave && !birthdayLeaveDateValue)}
+              >
+                {formDisabled ? (submitting ? "Submitting…" : "Loading…") : "Submit For Approval"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle>Balances</CardTitle>
+        <Card className="overflow-hidden">
+          <CardHeader className="bg-ex-surface/30">
+            <div className="flex items-start gap-3">
+              <div className="bg-ex-secondary/10 text-ex-secondary flex size-9 shrink-0 items-center justify-center rounded-lg">
+                <Wallet className="size-4" aria-hidden />
+              </div>
+              <div className="min-w-0 space-y-0.5">
+                <CardTitle>Balances</CardTitle>
+                <CardDescription>Your current leave entitlements.</CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <span>Paid Leave</span>
-                <p className="text-ex-muted text-xs">
-                  {balancesLoading
-                    ? "Loading monthly accrual…"
-                    : `${balances?.paid?.used ?? 0} used · ${balances?.paid?.accrued ?? 0}/${balances?.paid?.allocated ?? 12} accrued`}
-                </p>
-              </div>
-              <Badge>{balancesLoading ? "..." : (balances?.paid?.available ?? 0)} available</Badge>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <span>Sick Leave</span>
-                <p className="text-ex-muted text-xs">
-                  {balancesLoading
-                    ? "Loading quarterly entitlement…"
-                    : `${balances?.sick?.remaining ?? 0}/${balances?.sick?.allocated ?? 4} yearly remaining · ${balances?.sick?.expired ?? 0} expired`}
-                </p>
-              </div>
-              <Badge>
-                {balancesLoading ? "..." : (balances?.sick?.available ?? 0)} this quarter
-              </Badge>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <span>Casual Leave</span>
-                <p className="text-ex-muted text-xs">
-                  {balancesLoading
-                    ? "Loading quarterly entitlement…"
-                    : `${balances?.casual?.remaining ?? 0}/${balances?.casual?.allocated ?? 4} yearly remaining · ${balances?.casual?.expired ?? 0} expired`}
-                </p>
-              </div>
-              <Badge>
-                {balancesLoading ? "..." : (balances?.casual?.available ?? 0)} this quarter
-              </Badge>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <span>Birthday Leave</span>
-                <p className="text-ex-muted text-xs">One day per calendar year</p>
-              </div>
-              <Badge variant="accent">
-                {balancesLoading ? "..." : (balances?.birthday?.available ?? 0)} available
-              </Badge>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span>Unpaid Leave</span>
-              <Badge variant="accent">
-                {balancesLoading ? "..." : (balances?.unpaid?.used ?? 0)} used
-              </Badge>
-            </div>
+          <CardContent className="space-y-2.5 pt-5">
+            <BalanceRow
+              title="Paid Leave"
+              detail={
+                balancesLoading
+                  ? "Loading monthly accrual…"
+                  : `${balances?.paid?.used ?? 0} used · ${balances?.paid?.accrued ?? 0}/${balances?.paid?.allocated ?? 12} accrued`
+              }
+              badge={`${balancesLoading ? "…" : (balances?.paid?.available ?? 0)} available`}
+            />
+            <BalanceRow
+              title="Sick Leave"
+              detail={
+                balancesLoading
+                  ? "Loading quarterly entitlement…"
+                  : `${balances?.sick?.remaining ?? 0}/${balances?.sick?.allocated ?? 4} yearly remaining · ${balances?.sick?.expired ?? 0} expired`
+              }
+              badge={`${balancesLoading ? "…" : (balances?.sick?.available ?? 0)} this quarter`}
+            />
+            <BalanceRow
+              title="Casual Leave"
+              detail={
+                balancesLoading
+                  ? "Loading quarterly entitlement…"
+                  : `${balances?.casual?.remaining ?? 0}/${balances?.casual?.allocated ?? 4} yearly remaining · ${balances?.casual?.expired ?? 0} expired`
+              }
+              badge={`${balancesLoading ? "…" : (balances?.casual?.available ?? 0)} this quarter`}
+            />
+            <BalanceRow
+              title="Birthday Leave"
+              detail="One day per calendar year"
+              badge={`${balancesLoading ? "…" : (balances?.birthday?.available ?? 0)} available`}
+              badgeVariant="accent"
+            />
+            <BalanceRow
+              title="Unpaid Leave"
+              detail="Tracked separately from paid entitlements"
+              badge={`${balancesLoading ? "…" : (balances?.unpaid?.used ?? 0)} used`}
+              badgeVariant="accent"
+            />
 
             {(balances?.unpaid?.leaves?.length ?? 0) > 0 && (
               <div className="space-y-2 border-t pt-3">
                 <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
-                  Unpaid leave
+                  Unpaid Leave History
                 </p>
                 <ul className="max-h-48 space-y-2 overflow-y-auto">
                   {balances?.unpaid?.leaves.map((leave, index) => (
                     <li
                       key={`${leave.date}-${leave.slot}-${index}`}
-                      className="bg-ex-surface rounded-md border p-2 text-xs"
+                      className="bg-ex-surface border-ex-border rounded-lg border p-2.5 text-xs"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium">
@@ -553,7 +630,7 @@ export default function LeaveDeskPage() {
                           <span className="text-ex-muted">{formatLeaveDayCount(leave.days)}</span>
                         </div>
                       </div>
-                      {leave.reason ? <p className="mt-1">{leave.reason}</p> : null}
+                      {leave.reason ? <p className="text-ex-muted mt-1">{leave.reason}</p> : null}
                       {leave.rejectReason ? (
                         <p className="mt-1 text-rose-600 dark:text-rose-400">
                           Rejected: {leave.rejectReason}
@@ -568,13 +645,13 @@ export default function LeaveDeskPage() {
             {applications.length > 0 && (
               <div className="space-y-2 border-t pt-3">
                 <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
-                  Your leave applications
+                  Your Leave Applications
                 </p>
                 <ul className="max-h-56 space-y-2 overflow-y-auto">
                   {applications.map((application) => (
                     <li
                       key={`${application.id}:${application.date}:${application.status}`}
-                      className="bg-ex-surface rounded-md border p-2 text-xs"
+                      className="bg-ex-surface border-ex-border rounded-lg border p-2.5 text-xs"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium">
@@ -595,7 +672,9 @@ export default function LeaveDeskPage() {
                         </div>
                       </div>
 
-                      {application.reason ? <p className="mt-1">{application.reason}</p> : null}
+                      {application.reason ? (
+                        <p className="text-ex-muted mt-1">{application.reason}</p>
+                      ) : null}
                       {application.rejectReason ? (
                         <p className="mt-1 text-rose-600 dark:text-rose-400">
                           Rejected: {application.rejectReason}
@@ -607,7 +686,7 @@ export default function LeaveDeskPage() {
               </div>
             )}
 
-            <p className="text-ex-muted text-xs">
+            <p className="text-ex-muted border-ex-border border-t pt-3 text-xs leading-relaxed">
               Paid leave accrues monthly and carries forward within the calendar year. Sick and
               casual leave provide one day per quarter and expire when the quarter ends. Applied
               leaves count toward availability until rejected.

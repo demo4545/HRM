@@ -79,7 +79,7 @@ export default function EmployeeProfileByRowPage() {
     return (
       <div className="space-y-8">
         <PageHeader title="Employee Profile" description="Loading employee record…" />
-        <FormSkeleton label="Loading profile…" fields={8} />
+        <FormSkeleton label="Loading Profile…" fields={8} />
       </div>
     );
   }
@@ -89,13 +89,13 @@ export default function EmployeeProfileByRowPage() {
       <div className="space-y-8">
         <PageHeader title="Employee Profile" />
         <AccessDenied
-          title="Profile unavailable"
+          title="Profile Unavailable"
           description={error ?? "Employee not found."}
           action={
             <Link href="/employee">
               <Button variant="outline" size="sm">
                 <ArrowLeft className="size-4" />
-                Back to directory
+                Back to Directory
               </Button>
             </Link>
           }
@@ -108,13 +108,13 @@ export default function EmployeeProfileByRowPage() {
     <div className="space-y-8">
       <PageHeader
         title="Employee Profile"
-        description={`Viewing ${form.name || "employee"} (${form.employeeId || sheetRow}).`}
+        description={`Viewing ${form.name || "employee"}'s details.`}
         actions={
           <>
             <Link href="/employee">
               <Button variant="outline" size="sm">
                 <ArrowLeft className="size-4" />
-                Back to directory
+                Back to Directory
               </Button>
             </Link>
             <Link href={`/employee/${sheetRow}/edit`}>
@@ -126,7 +126,7 @@ export default function EmployeeProfileByRowPage() {
           </>
         }
       />
-      <EmployeeProfileView form={form} />
+      <EmployeeProfileView form={form} employeeSheetRow={sheetRow} />
     </div>
   );
 }

@@ -24,6 +24,8 @@ import {
   maskPan,
   maxBirthDateForMinAge,
   sanitizePersonNameInput,
+  splitPersonName,
+  joinPersonName,
   sheetRowToForm,
   todayIsoDate,
   validateEmployeeForm,
@@ -119,6 +121,7 @@ export function EmployeeForm({
     position: form.position,
     role: form.role,
   });
+  const { firstName, lastName } = useMemo(() => splitPersonName(form.name), [form.name]);
 
   useEffect(() => {
     return () => {
@@ -127,6 +130,20 @@ export function EmployeeForm({
       }
     };
   }, [profileImagePreview]);
+
+  const updateNamePart = (part: "first" | "last", raw: string) => {
+    const value = sanitizePersonNameInput(raw);
+    const nextFirst = part === "first" ? value : firstName;
+    const nextLast = part === "last" ? value : lastName;
+
+    setForm((prev) => ({ ...prev, name: joinPersonName(nextFirst, nextLast) }));
+    setFieldErrors((prev) => {
+      if (!prev.name) return prev;
+      const next = { ...prev };
+      delete next.name;
+      return next;
+    });
+  };
 
   const clearProfileImagePreview = () => {
     setProfileImagePreview((prev) => {
@@ -152,7 +169,7 @@ export function EmployeeForm({
           if (cancelled) return;
 
           if (!result.success) {
-            setError(toUserFacingFetchError(result.message || "Employee not found"));
+            setError(toUserFacingFetchError(result.message || "Employee Not Found"));
             return;
           }
 
@@ -172,7 +189,7 @@ export function EmployeeForm({
           if (cancelled) return;
 
           if (!result.success) {
-            setError(toUserFacingFetchError(result.message || "Employee not found"));
+            setError(toUserFacingFetchError(result.message || "Employee Not Found"));
             return;
           }
 
@@ -241,12 +258,12 @@ export function EmployeeForm({
         if (result.success) {
           setSkillSuggestions(Array.isArray(result.skills) ? result.skills : []);
         } else {
-          setSkillsError(result.message || "Failed to load skill suggestions");
+          setSkillsError(result.message || "Failed to Load Skill Suggestions");
           setSkillSuggestions([]);
         }
       } catch {
         if (!cancelled) {
-          setSkillsError("Failed to load skill suggestions");
+          setSkillsError("Failed to Load Skill Suggestions");
           setSkillSuggestions([]);
         }
       } finally {
@@ -362,7 +379,7 @@ export function EmployeeForm({
 
   const saveEmployee = async (formData: EmployeeFormState) => {
     if (!sheetHeaders.length) {
-      setError("Sheet columns are not loaded yet.");
+      setError("Sheet Columns are not Loaded Yet.");
       return;
     }
 
@@ -437,7 +454,7 @@ export function EmployeeForm({
       }
       setError(
         toUserFacingActionError(
-          result.message || (isEdit ? "Failed to update employee" : "Failed to add employee"),
+          result.message || (isEdit ? "Failed to Update Employee" : "Failed to Add Employee"),
         ),
       );
     } catch (error) {
@@ -474,16 +491,32 @@ export function EmployeeForm({
               <CardTitle>Employee Details</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
-              <FormField label="Name" id="name" error={fieldErrors.name}>
+              <FormField
+                label="First Name"
+                id="firstName"
+                error={fieldErrors.name && !firstName.trim() ? fieldErrors.name : undefined}
+              >
                 <Input
-                  id="name"
-                  value={form.name}
-                  onChange={update("name")}
-                  placeholder="Full Name"
+                  id="firstName"
+                  value={firstName}
+                  onChange={(e) => updateNamePart("first", e.target.value)}
                   required
-                  aria-invalid={Boolean(fieldErrors.name)}
+                  aria-invalid={Boolean(fieldErrors.name && !firstName.trim())}
                 />
-                <p className="text-ex-muted text-xs">Full name with first and last name.</p>
+              </FormField>
+
+              <FormField
+                label="Last Name"
+                id="lastName"
+                error={fieldErrors.name && firstName.trim() ? fieldErrors.name : undefined}
+              >
+                <Input
+                  id="lastName"
+                  value={lastName}
+                  onChange={(e) => updateNamePart("last", e.target.value)}
+                  required
+                  aria-invalid={Boolean(fieldErrors.name && firstName.trim())}
+                />
               </FormField>
 
               <FormField label="Role" id="role" error={fieldErrors.role}>
@@ -502,6 +535,17 @@ export function EmployeeForm({
                 </Select>
               </FormField>
 
+              <FormField label="Birthday date" id="birthdayDate" error={fieldErrors.birthdayDate}>
+                <DateInput
+                  id="birthdayDate"
+                  value={form.birthdayDate}
+                  onChange={(birthdayDate) => updateField("birthdayDate", birthdayDate)}
+                  maxDate={maxBirthDate}
+                  required
+                  aria-invalid={Boolean(fieldErrors.birthdayDate)}
+                />
+              </FormField>
+
               <div className="space-y-2 sm:col-span-2">
                 <FormField label="Address" id="address" error={fieldErrors.address}>
                   <Textarea
@@ -516,17 +560,6 @@ export function EmployeeForm({
                 </FormField>
               </div>
 
-              <FormField label="Birthday date" id="birthdayDate" error={fieldErrors.birthdayDate}>
-                <DateInput
-                  id="birthdayDate"
-                  value={form.birthdayDate}
-                  onChange={(birthdayDate) => updateField("birthdayDate", birthdayDate)}
-                  maxDate={maxBirthDate}
-                  required
-                  aria-invalid={Boolean(fieldErrors.birthdayDate)}
-                />
-              </FormField>
-
               <FormField label="PAN number" id="panNumber" error={fieldErrors.panNumber} optional>
                 <Input
                   id="panNumber"
@@ -537,9 +570,6 @@ export function EmployeeForm({
                   maxLength={10}
                   aria-invalid={Boolean(fieldErrors.panNumber)}
                 />
-                {form.panNumber ? (
-                  <p className="text-ex-muted text-xs">Displayed as {maskPan(form.panNumber)}</p>
-                ) : null}
               </FormField>
 
               <FormField
@@ -558,11 +588,6 @@ export function EmployeeForm({
                   maxLength={12}
                   aria-invalid={Boolean(fieldErrors.aadharNumber)}
                 />
-                {form.aadharNumber ? (
-                  <p className="text-ex-muted text-xs">
-                    Displayed as {maskAadhar(form.aadharNumber)}
-                  </p>
-                ) : null}
               </FormField>
 
               <FormField
@@ -632,12 +657,12 @@ export function EmployeeForm({
 
           <Card>
             <CardHeader>
-              <CardTitle>Parent / Guardian Information</CardTitle>
+              <CardTitle>Emergency Contact</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="mb-4 grid gap-4 sm:grid-cols-2">
                 <FormField
-                  label="Parent / Guardian Name"
+                  label="Contact Name"
                   id="parentName"
                   error={fieldErrors.parentName}
                 >
@@ -645,13 +670,12 @@ export function EmployeeForm({
                     id="parentName"
                     value={form.parentName}
                     onChange={update("parentName")}
-                    placeholder="Full Name"
                     required
                     aria-invalid={Boolean(fieldErrors.parentName)}
                   />
                 </FormField>
                 <FormField
-                  label="Parent / Guardian Contact"
+                  label="Contact Number"
                   id="parentContact"
                   error={fieldErrors.parentContact}
                 >
@@ -659,7 +683,6 @@ export function EmployeeForm({
                     id="parentContact"
                     value={form.parentContact}
                     onChange={(value) => updateField("parentContact", value)}
-                    placeholder="Enter Number"
                     required
                     aria-invalid={Boolean(fieldErrors.parentContact)}
                   />
@@ -834,7 +857,7 @@ export function EmployeeForm({
                     />
                     <p className="text-ex-muted text-xs">
                       {isEdit
-                        ? "If set, must be 8+ characters with uppercase, number, and special character (@, !, etc.). Leave blank to keep current password."
+                        ? "If set, must be 8+ characters with uppercase, number, and special character (@, !, etc.)."
                         : "Leave blank to auto-generate. If entered: 8+ characters with one uppercase letter, one number, and one special character (@, !, etc.). Stored encrypted."}
                     </p>
                   </FormField>
@@ -842,6 +865,22 @@ export function EmployeeForm({
 
                 {!hideEmploymentFields ? (
                   <>
+                  {canManage ? (
+                      <div className="space-y-2">
+                        <FormField label="Salary (monthly)" id="salary" error={fieldErrors.salary}>
+                          <Input
+                            id="salary"
+                            type="text"
+                            inputMode="decimal"
+                            value={form.salary}
+                            onChange={update("salary")}
+                            autoComplete="off"
+                            aria-invalid={Boolean(fieldErrors.salary)}
+                          />
+                        </FormField>
+                      </div>
+                    ) : null}
+
                     <div className="space-y-2">
                       <FormField label="Experience" id="experience" error={fieldErrors.experience}>
                         <Input
@@ -860,7 +899,7 @@ export function EmployeeForm({
 
                     <div className="space-y-2">
                       <FormField
-                        label="Joining date"
+                        label="Joining Date"
                         id="joiningDate"
                         error={fieldErrors.joiningDate}
                       >
@@ -877,7 +916,7 @@ export function EmployeeForm({
 
                     <div className="space-y-2">
                       <FormField
-                        label="Last increment date"
+                        label="Last Increment Date"
                         id="lastIncrementDate"
                         error={fieldErrors.lastIncrementDate}
                       >
@@ -893,27 +932,6 @@ export function EmployeeForm({
                         />
                       </FormField>
                     </div>
-
-                    {canManage ? (
-                      <div className="space-y-2 sm:col-span-2">
-                        <FormField label="Salary (monthly)" id="salary" error={fieldErrors.salary}>
-                          <Input
-                            id="salary"
-                            type="text"
-                            inputMode="decimal"
-                            value={form.salary}
-                            onChange={update("salary")}
-                            placeholder="e.g. 50000 or 5,00,000"
-                            autoComplete="off"
-                            aria-invalid={Boolean(fieldErrors.salary)}
-                          />
-                          <p className="text-ex-muted text-xs">
-                            Positive amount only. Visible to HR and super admin — stored in the
-                            employee sheet.
-                          </p>
-                        </FormField>
-                      </div>
-                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -926,7 +944,7 @@ export function EmployeeForm({
                 <CardTitle>Skills</CardTitle>
               </CardHeader>
               <CardContent>
-                <FormField label="Tech skills" id="skills">
+                <FormField label="Tech Skills" id="skills">
                   <SkillsChipsInput
                     id="skills"
                     value={parseSkillsValue(form.skills)}
@@ -939,9 +957,7 @@ export function EmployeeForm({
                   <p className="text-ex-muted text-xs">
                     {skillsError
                       ? skillsError
-                      : skillsLoading
-                        ? "Loading skill suggestions…"
-                        : "Enter a skill and click Add to create a chip. Click any chip to select it."}
+                        : "Enter a skill and click Add to create a tag. Click any tag to select it."}
                   </p>
                 </FormField>
               </CardContent>
@@ -952,7 +968,7 @@ export function EmployeeForm({
 
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="submit" disabled={submitting || headersLoading || !sheetHeaders.length}>
-          {submitting ? "Saving…" : isEdit ? "Save changes" : "Add employee"}
+          {submitting ? "Saving…" : isEdit ? "Save Changes" : "Add Employee"}
         </Button>
 
         {onCancel ? (

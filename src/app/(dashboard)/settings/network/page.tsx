@@ -402,7 +402,7 @@ export default function NetworkAccessSettingsPage() {
         description="Allow the portal only from office router public IPs. Work-from-home employees can be exempted individually, or mark company WFH days to lift restriction for everyone. HR and Super Admin always bypass this check so you can update IPs after a power cut."
         actions={
           <Badge variant={restrictionEnabled ? "warning" : "accent"}>
-            {restrictionEnabled ? "Restriction on" : "Restriction off"}
+            {restrictionEnabled ? "Restriction On" : "Restriction Off"}
           </Badge>
         }
       />
@@ -424,7 +424,7 @@ export default function NetworkAccessSettingsPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <p className="text-ex-primary text-sm font-medium">Require Office Wi‑Fi</p>
+            <p className="text-ex-primary text-sm font-medium">Require Office WiFi</p>
             <p className="text-ex-muted text-xs">
               When enabled, employees must use an IP from the Office Wi‑Fi list below (unless they
               are on the remote access list). Your public IP:{" "}
@@ -462,7 +462,6 @@ export default function NetworkAccessSettingsPage() {
                   id="network-label"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  placeholder="Router 1 / Floor 2"
                   disabled={saving}
                 />
               </div>
@@ -472,7 +471,6 @@ export default function NetworkAccessSettingsPage() {
                   id="network-ip"
                   value={ip}
                   onChange={(e) => setIp(e.target.value)}
-                  placeholder="203.0.113.10"
                   disabled={saving}
                   className="font-mono"
                 />
@@ -499,11 +497,11 @@ export default function NetworkAccessSettingsPage() {
                   }
                 >
                   <Wifi className="mr-1.5 size-4" />
-                  Add my current IP
+                  Add My Current IP
                 </Button>
               ) : (
                 <Button type="button" variant="outline" disabled={saving} onClick={resetIpForm}>
-                  Cancel edit
+                  Cancel Edit
                 </Button>
               )}
             </div>
@@ -556,7 +554,7 @@ export default function NetworkAccessSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Work from home (unrestricted)</CardTitle>
+            <CardTitle>Work From Home (Unrestricted)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-ex-muted text-xs">
@@ -575,7 +573,6 @@ export default function NetworkAccessSettingsPage() {
                   {availableEmployees.map((employee) => (
                     <option key={employee.sheetRow} value={String(employee.sheetRow)}>
                       {employee.name}
-                      {employee.employeeId ? ` (${employee.employeeId})` : ""}
                     </option>
                   ))}
                 </Select>
@@ -594,19 +591,16 @@ export default function NetworkAccessSettingsPage() {
               {loading ? (
                 <p className="text-ex-muted text-sm">Loading…</p>
               ) : remoteEmployees.length === 0 ? (
-                <p className="text-ex-muted text-sm">No remote employees yet.</p>
+                <p className="text-ex-muted text-sm">No Remote Employees Yet.</p>
               ) : (
                 remoteEmployees.map((row) => (
                   <div
                     key={row.id}
-                    className="border-ex-border bg-ex-elevated flex items-center gap-3 rounded-xl border p-3"
+                    className="border-ex-border bg-ex-elevated flex items-center gap-3 rounded-xl border p-2"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="text-ex-primary truncate text-sm font-medium">
                         {row.employeeName}
-                      </p>
-                      <p className="text-ex-muted mt-0.5 text-xs">
-                        {row.employeeId || `Row ${row.employeeSheetRow}`}
                       </p>
                     </div>
                     <Button
@@ -629,7 +623,7 @@ export default function NetworkAccessSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Company WFH days (no Wi‑Fi restriction)</CardTitle>
+          <CardTitle>Company WFH Days (No Wi‑Fi Restriction)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-ex-muted text-xs">
@@ -638,7 +632,7 @@ export default function NetworkAccessSettingsPage() {
           </p>
           <div className="grid gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] sm:items-end">
             <div className="space-y-2">
-              <Label htmlFor="wfh-date">WFH date</Label>
+              <Label htmlFor="wfh-date">WFH Date</Label>
               <Input
                 id="wfh-date"
                 type="date"
@@ -648,12 +642,11 @@ export default function NetworkAccessSettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="wfh-note">Note (optional)</Label>
+              <Label htmlFor="wfh-note">Note (Optional)</Label>
               <Input
                 id="wfh-note"
                 value={wfhNote}
                 maxLength={120}
-                placeholder="e.g. Ganesh Chaturthi"
                 onChange={(e) => setWfhNote(e.target.value)}
                 disabled={saving || loading}
               />
@@ -664,7 +657,7 @@ export default function NetworkAccessSettingsPage() {
               onClick={() => void addCompanyWfhDay()}
             >
               <Plus className="mr-1 size-4" />
-              Add day
+              Add Day
             </Button>
           </div>
 
@@ -672,7 +665,7 @@ export default function NetworkAccessSettingsPage() {
             {loading ? (
               <p className="text-ex-muted text-sm">Loading…</p>
             ) : companyWfhDays.length === 0 ? (
-              <p className="text-ex-muted text-sm">No company WFH days scheduled.</p>
+              <p className="text-ex-muted text-sm">No Company WFH Days Scheduled.</p>
             ) : (
               companyWfhDays.map((day) => {
                 const isToday = day.date === localTodayIso();
@@ -737,8 +730,8 @@ export default function NetworkAccessSettingsPage() {
                   {pendingDelete.kind === "network"
                     ? "Remove office IP?"
                     : pendingDelete.kind === "wfh"
-                      ? "Remove company WFH day?"
-                      : "Remove remote access?"}
+                      ? "Remove Company WFH Day?"
+                      : "Remove Remote Access?"}
                 </h2>
                 <p className="text-ex-muted mt-1 text-sm">
                   {pendingDelete.kind === "network" ? (

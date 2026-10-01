@@ -508,7 +508,7 @@ export default function PayrollPage() {
           </CardHeader>
           <CardContent className="grid gap-6 sm:grid-cols-2">
             <Metric
-              label="OT Payable"
+              label="Overtime Payable"
               value={formatInr(deductions?.overtime.payable ?? 0)}
               loading={loading}
             />
@@ -522,7 +522,7 @@ export default function PayrollPage() {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-ex-primary text-base font-semibold">Employee payroll breakdown</h2>
+        <h2 className="text-ex-primary text-base font-semibold">Employee Payroll Breakdown</h2>
         <p className="text-ex-muted text-sm">
           Day codes:{" "}
           {PAYROLL_DAY_CODE_LEGEND.map((item, index) => (
@@ -536,7 +536,7 @@ export default function PayrollPage() {
           columns={columns}
           rows={tableRows}
           loading={loading}
-          emptyTitle="No payroll rows"
+          emptyTitle="No Payroll Rows"
           emptyDescription="Active employees with a configured salary for this period will appear here."
         />
       </div>

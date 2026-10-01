@@ -83,7 +83,7 @@ export function isNavGroupActive(pathname: string, item: NavItem): boolean {
 
 export const navStructure: NavItem[] = [
   {
-    label: "Overview",
+    label: "Dashboard",
     href: "/dashboard",
     icon: "LayoutDashboard",
     roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
@@ -95,44 +95,14 @@ export const navStructure: NavItem[] = [
     roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
     children: [
       {
-        label: "All Employees",
-        href: "/employee",
-        roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
-      },
-      {
-        label: "Boarding",
-        href: "/employee/onboarding",
-        roles: [SUPER_ADMIN, HR_MANAGER],
-      },
-      {
-        label: "Employee Profile",
-        href: "/employee/profile",
-        roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
-      },
-      {
-        label: "My System Specs",
-        href: "/employee/system-specs",
-        roles: [HR_MANAGER, EMPLOYEE],
-      },
-      {
-        label: "Performance",
-        href: "/employee/performance",
-        roles: [SUPER_ADMIN, HR_MANAGER],
-      },
-      {
         label: "Punch in / out",
         href: "/employee/punch",
         roles: [HR_MANAGER, EMPLOYEE],
       },
       {
-        label: "Overtime & Approvals",
-        href: "/employee/overtime",
+        label: "All Employees",
+        href: "/employee",
         roles: [SUPER_ADMIN, HR_MANAGER],
-      },
-      {
-        label: "Salary Slips",
-        href: "/employee/salary-slips",
-        roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
       },
       {
         label: "Payroll",
@@ -145,16 +115,42 @@ export const navStructure: NavItem[] = [
         roles: [SUPER_ADMIN, HR_MANAGER],
       },
       {
-        label: "Expenses",
-        href: "/employee/expenses",
+        label: "Overtime & Approvals",
+        href: "/employee/overtime",
         roles: [SUPER_ADMIN, HR_MANAGER],
       },
-      { label: "Complaints", href: "/employee/complaints", roles: [] },
       {
         label: "Attendance History",
         href: "/employee/attendance",
         roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
       },
+      {
+        label: "Expenses",
+        href: "/employee/expenses",
+        roles: [SUPER_ADMIN, HR_MANAGER],
+      },
+      {
+        label: "Salary Slips",
+        href: "/employee/salary-slips",
+        roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
+      },
+      {
+        label: "Performance",
+        href: "/employee/performance",
+        roles: [SUPER_ADMIN, HR_MANAGER],
+      },
+      {
+        label: "Boarding",
+        href: "/employee/onboarding",
+        roles: [SUPER_ADMIN, HR_MANAGER],
+      },
+      {
+        label: "System Specifications",
+        href: "/employee/system-specs",
+        roles: [HR_MANAGER, EMPLOYEE],
+      },
+      { label: "Complaints", href: "/employee/complaints", roles: [] },
+
       { label: "Leave & festivals", href: "/employee/leave-festival", roles: [] },
       { label: "Leave privacy", href: "/employee/privacy", roles: [] },
     ],
@@ -166,13 +162,13 @@ export const navStructure: NavItem[] = [
     roles: [SUPER_ADMIN, HR_MANAGER],
     children: [
       {
-        label: "Internship",
-        href: "/documents/internship",
+        label: "Employees",
+        href: "/documents/employee",
         roles: [SUPER_ADMIN, HR_MANAGER],
       },
       {
-        label: "Employee Documents",
-        href: "/documents/employee",
+        label: "Interns",
+        href: "/documents/internship",
         roles: [SUPER_ADMIN, HR_MANAGER],
       },
     ],
@@ -195,30 +191,30 @@ export const navStructure: NavItem[] = [
     ],
   },
   {
-    label: "Notifications",
-    href: "/notifications",
-    icon: "Bell",
-    roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
-    children: [
-      {
-        roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
-        label: "Notifications Center",
-        href: "/notifications",
-      },
-      {
-        roles: [SUPER_ADMIN, HR_MANAGER],
-        label: "Notice / Announcement",
-        href: "/notifications/announcements",
-      },
-      { roles: [], label: "Automation rules", href: "/notifications/rules" },
-    ],
-  },
-  {
-    label: "Complaints",
-    href: "/complaints",
-    icon: "MessageSquareWarning",
+    label: "Social",
+    href: "/notifications/announcements",
+    icon: "Megaphone",
     roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
   },
+  // {
+  //   label: "Notifications",
+  //   href: "/notifications",
+  //   icon: "Bell",
+  //   roles: [SUPER_ADMIN, HR_MANAGER],
+  //   children: [
+  //     {
+  //       roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
+  //       label: "Notifications",
+  //       href: "/notifications",
+  //     },
+  //     {
+  //       roles: [SUPER_ADMIN, HR_MANAGER],
+  //       label: "Notice / Announcement",
+  //       href: "/notifications/announcements",
+  //     },
+  //     { roles: [], label: "Automation rules", href: "/notifications/rules" },
+  //   ],
+  // },
   {
     label: "Integrations",
     href: "/integrations",
@@ -251,12 +247,13 @@ export const navStructure: NavItem[] = [
         label: "System Specifications",
         href: "/settings/system-specs",
       },
-      {
-        roles: [SUPER_ADMIN],
-        label: "Company Branding",
-        href: "/settings/branding",
-      },
     ],
+  },
+  {
+    label: "Complaints",
+    href: "/complaints",
+    icon: "MessageSquareWarning",
+    roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
   },
 ];
 
@@ -274,10 +271,20 @@ export function filterNav(role: UserRole | null): NavItem[] {
 
   return navStructure
     .filter((item) => item.roles.includes(role))
-    .map((item) => ({
-      ...item,
-      children: filterNavChildren(item.children, role),
-    }))
+    .map((item) => {
+      const children = filterNavChildren(item.children, role);
+      // If the section index route is not allowed (e.g. employees can't open
+      // /employee), point the group link at the first visible child instead.
+      const href =
+        children?.length && !children.some((child) => child.href === item.href)
+          ? children[0]!.href
+          : item.href;
+      return {
+        ...item,
+        href,
+        children,
+      };
+    })
     .filter((item) => !item.children || item.children.length > 0);
 }
 

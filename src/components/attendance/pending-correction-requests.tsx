@@ -67,7 +67,7 @@ export function PendingCorrectionRequests() {
       await loadCorrections();
       await refreshNotifications();
       pushToast({
-        title: status === "Approved" ? "Correction approved" : "Correction rejected",
+        title: status === "Approved" ? "Correction Approved" : "Correction Rejected",
         body:
           status === "Approved"
             ? "The attendance record was updated and the employee has been notified."
@@ -87,7 +87,7 @@ export function PendingCorrectionRequests() {
       <Card id="corrections">
         <CardContent className="text-ex-muted flex items-center justify-center gap-2 py-8 text-sm">
           <Loader2 className="size-4 animate-spin" aria-hidden />
-          Loading correction requests…
+          Loading Correction Requests…
         </CardContent>
       </Card>
     );
@@ -100,7 +100,7 @@ export function PendingCorrectionRequests() {
   return (
     <Card id="corrections" className="scroll-mt-6">
       <CardHeader>
-        <CardTitle className="text-base">Pending correction requests</CardTitle>
+        <CardTitle className="text-base">Pending Correction Requests</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {error ? (
@@ -110,7 +110,7 @@ export function PendingCorrectionRequests() {
         ) : null}
 
         {corrections.length === 0 ? (
-          <p className="text-ex-muted text-sm">No pending correction requests.</p>
+          <p className="text-ex-muted text-sm">No Pending Correction Requests.</p>
         ) : (
           corrections.map((c) => (
             <div

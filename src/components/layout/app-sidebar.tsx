@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  Bell,
   CalendarDays,
   ChevronDown,
   FileText,
   LayoutDashboard,
+  Megaphone,
   Menu,
   MessageSquareWarning,
   Plug,
@@ -29,7 +29,7 @@ const iconMap = {
   LayoutDashboard,
   Users,
   CalendarDays,
-  Bell,
+  Megaphone,
   MessageSquareWarning,
   Plug,
   Shield,

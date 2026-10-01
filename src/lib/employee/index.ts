@@ -31,6 +31,8 @@ export {
   isCeoPosition,
   hidesEmploymentFields,
   sanitizePersonNameInput,
+  splitPersonName,
+  joinPersonName,
   validateEmployeeForm,
   firstEmployeeValidationMessage,
   maxBirthDateForMinAge,

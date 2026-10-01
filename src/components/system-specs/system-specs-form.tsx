@@ -73,7 +73,7 @@ export function SystemSpecsForm({
   onChange,
   onSubmit,
   saving = false,
-  submitLabel = "Save specifications",
+  submitLabel = "Save Specifications",
   disabled = false,
 }: Props) {
   const isLocked = disabled || saving;
@@ -125,7 +125,6 @@ export function SystemSpecsForm({
                       <Input
                         id={`${device.key}-${index}-name`}
                         value={item.name}
-                        placeholder={`${device.label} name`}
                         onChange={(e) =>
                           onChange(
                             updateDeviceItem(value, device.key, index, "name", e.target.value),
@@ -134,11 +133,10 @@ export function SystemSpecsForm({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor={`${device.key}-${index}-serial`}>Serial number</Label>
+                      <Label htmlFor={`${device.key}-${index}-serial`}>Serial Number</Label>
                       <Input
                         id={`${device.key}-${index}-serial`}
                         value={item.serialNumber}
-                        placeholder="Serial number"
                         onChange={(e) =>
                           onChange(
                             updateDeviceItem(
@@ -178,7 +176,7 @@ export function SystemSpecsForm({
 
         <div className="border-ex-border space-y-4 rounded-xl border p-4">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-ex-primary text-sm font-semibold">System login details</p>
+            <p className="text-ex-primary text-sm font-semibold">System Login Details</p>
             <Button type="button" variant="outline" size="sm" onClick={() => onChange(addLoginItem(value))}>
               <Plus className="size-3.5" />
               Add
@@ -215,7 +213,6 @@ export function SystemSpecsForm({
                       id={`login-${index}-username`}
                       autoComplete="off"
                       value={item.username}
-                      placeholder="System username"
                       onChange={(e) =>
                         onChange(updateLoginItem(value, index, "username", e.target.value))
                       }
@@ -228,7 +225,6 @@ export function SystemSpecsForm({
                       type="text"
                       autoComplete="off"
                       value={item.password}
-                      placeholder="System password"
                       onChange={(e) =>
                         onChange(updateLoginItem(value, index, "password", e.target.value))
                       }

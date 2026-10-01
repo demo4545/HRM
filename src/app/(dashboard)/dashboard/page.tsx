@@ -4,7 +4,7 @@ import { readResponseJson } from "@/lib/api/read-response-json";
 import Image from "next/image";
 import Link from "next/link";
 import { AlertTriangle, CalendarDays, Sparkles, Users } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 // import {
 //   Area,
 //   AreaChart,
@@ -17,7 +17,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AttendanceWidget } from "@/components/attendance/attendance-widget";
 import { DashboardAnnouncements } from "@/components/dashboard/dashboard-announcements";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 // import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -25,12 +24,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ROLES } from "@/app/consts/common";
 import { useAuth } from "@/contexts/auth-provider";
-import { canManageEmployees } from "@/lib/auth/roles";
+import { canManageEmployees, roleCanPunchInOut } from "@/lib/auth/roles";
 import { parseLeaveDisplayDate } from "@/lib/attendance/leave-range-display";
 import { formatIsoDate } from "@/lib/attendance/time";
 import { COMPANY_HOLIDAYS_2026, type CompanyHoliday } from "@/lib/company-holidays";
 import { resolveProfileImageSrc } from "@/lib/employee";
 import { toUserFacingFetchError } from "@/lib/api/user-facing-error";
+import { useTodayAttendance } from "@/hooks/use-today-attendance";
 import { cn } from "@/lib/utils";
 
 /** Shared body height so holiday / on-leave / absence cards don’t jump while loading. */
@@ -70,16 +70,19 @@ function DashboardStatCard({
   hint?: string;
   loading?: boolean;
 }) {
-  if (loading) {
-    return (
-      <div className="border-ex-border bg-ex-elevated flex h-full min-h-[9.5rem] flex-col justify-center rounded-xl border p-4 shadow-sm dark:shadow-none">
-        <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">{label}</p>
-        <div className="bg-ex-surface mt-2 h-8 w-20 animate-pulse rounded-md" aria-hidden />
-        {hint ? <p className="text-ex-muted mt-1 text-xs">{hint}</p> : null}
+  return (
+    <div className="border-ex-border bg-ex-elevated hover:border-ex-secondary/20 flex h-full min-h-[9.5rem] flex-col rounded-xl border p-4 shadow-sm transition dark:shadow-none">
+      <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">{label}</p>
+      <div className="mt-2 flex h-8 items-center">
+        {loading ? (
+          <div className="bg-ex-surface h-7 w-20 animate-pulse rounded-md" aria-hidden />
+        ) : (
+          <p className="text-ex-primary text-2xl leading-none font-semibold tabular-nums">{value}</p>
+        )}
       </div>
-    );
-  }
-  return <StatCard label={label} value={value} hint={hint} className="flex h-full min-h-[9.5rem] flex-col" />;
+      {hint ? <p className="text-ex-muted mt-1 text-xs">{hint}</p> : null}
+    </div>
+  );
 }
 
 type OnLeaveEmployee = {
@@ -366,6 +369,8 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const canManageLeave = user ? canManageEmployees(user.role) : false;
   const isEmployeeDashboard = user?.role === ROLES.EMPLOYEE;
+  const canShowAttendance = Boolean(user && roleCanPunchInOut(user.role));
+  const { loading: attendanceLoading } = useTodayAttendance();
   const [leaveDate, setLeaveDate] = useState(formatIsoDate());
   const [onLeave, setOnLeave] = useState<OnLeaveEmployee[]>([]);
   const [totalEmployees, setTotalEmployees] = useState(0);
@@ -378,6 +383,8 @@ export default function DashboardPage() {
   const [unapprovedAbsenceError, setUnapprovedAbsenceError] = useState<string | null>(null);
   const [companyHolidays, setCompanyHolidays] = useState<CompanyHoliday[]>(COMPANY_HOLIDAYS_2026);
   const [holidaysUsingFallback, setHolidaysUsingFallback] = useState(false);
+  const [holidaysLoading, setHolidaysLoading] = useState(true);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const holidayYear = 2026;
   const birthdayLeaveEmployees = onLeave.filter(
     (employee) => employee.leaveType.toLowerCase() === "birthday",
@@ -389,6 +396,16 @@ export default function DashboardPage() {
   const canFetchUnapprovedAbsence = canManageLeave && Boolean(user?.sheetRow);
   const unapprovedAbsenceLoading =
     canFetchUnapprovedAbsence && unapprovedAbsenceFetchedDate !== leaveDate;
+  const onLeaveSectionLoading = Boolean(user?.sheetRow) && onLeaveLoading;
+  const overviewLoading =
+    onLeaveSectionLoading ||
+    unapprovedAbsenceLoading ||
+    holidaysLoading ||
+    announcementsLoading ||
+    (canShowAttendance && attendanceLoading);
+  const handleAnnouncementsLoadingChange = useCallback((loading: boolean) => {
+    setAnnouncementsLoading(loading);
+  }, []);
   const upcomingHolidays = [...companyHolidays]
     .filter((holiday) => holiday.date >= formatIsoDate())
     .sort((left, right) => left.date.localeCompare(right.date));
@@ -510,6 +527,9 @@ export default function DashboardPage() {
       .catch(() => {
         // Keep the seeded holiday list when the remote sheet is temporarily unavailable.
         if (!cancelled) setHolidaysUsingFallback(true);
+      })
+      .finally(() => {
+        if (!cancelled) setHolidaysLoading(false);
       });
 
     return () => {
@@ -520,7 +540,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Executive Overview"
+        title="Dashboard"
         description="Live attendance, leave, and holiday signals for your team."
         // actions={
         //   <>
@@ -544,19 +564,23 @@ export default function DashboardPage() {
           <DashboardStatCard
             label={canManageLeave && leaveDate !== formatIsoDate() ? "On leave" : "On leave today"}
             value={`${onLeave.length}/${totalEmployees}`}
-            loading={onLeaveLoading}
+            loading={overviewLoading}
             hint={displayDate(canManageLeave ? leaveDate : formatIsoDate())}
           />
           {canManageLeave ? (
             <DashboardStatCard
               label={leaveDate !== formatIsoDate() ? "No punch-in" : "No punch-in today"}
               value={String(unapprovedAbsence.length)}
-              loading={unapprovedAbsenceLoading}
+              loading={overviewLoading}
               hint={displayDate(leaveDate)}
             />
           ) : null}
         </div>
-        <DashboardAnnouncements className="min-w-0 flex-1" />
+        <DashboardAnnouncements
+          className="min-w-0 flex-1"
+          loading={overviewLoading}
+          onLoadingChange={handleAnnouncementsLoadingChange}
+        />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3 lg:items-stretch">
@@ -575,14 +599,25 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-            {upcomingHolidays.length > 0 ? (
+            {upcomingHolidays.length > 0 && !overviewLoading ? (
               <Badge variant="accent" className="shrink-0 whitespace-nowrap">
                 {upcomingHolidays.length} upcoming
               </Badge>
+            ) : overviewLoading ? (
+              <div className="bg-ex-surface h-6 w-24 shrink-0 animate-pulse rounded-full" />
             ) : null}
           </CardHeader>
           <CardContent className="flex flex-1 flex-col p-5">
-            {upcomingHolidays.length === 0 ? (
+            {overviewLoading ? (
+              <div className={cn("grid gap-3", DASHBOARD_PANEL_BODY)}>
+                {[0, 1, 2, 3].map((item) => (
+                  <div
+                    key={item}
+                    className="border-ex-border bg-ex-surface h-full min-h-16 animate-pulse rounded-xl border"
+                  />
+                ))}
+              </div>
+            ) : upcomingHolidays.length === 0 ? (
               <div
                 className={cn(
                   "border-ex-border flex flex-col items-center justify-center rounded-xl border border-dashed px-5 text-center",
@@ -664,7 +699,7 @@ export default function DashboardPage() {
               ) : null}
             </div>
             {isEmployeeDashboard ? (
-              onLeaveLoading ? (
+              overviewLoading ? (
                 <div className="bg-ex-surface h-6 w-20 shrink-0 animate-pulse rounded-full" />
               ) : (
                 <Badge
@@ -676,7 +711,7 @@ export default function DashboardPage() {
               )
             ) : (
               <div className="flex min-h-7 flex-wrap items-center gap-2">
-                {onLeaveLoading ? (
+                {overviewLoading ? (
                   <>
                     <div className="bg-ex-surface h-6 w-20 animate-pulse rounded-full" />
                     {canManageLeave ? (
@@ -705,7 +740,7 @@ export default function DashboardPage() {
                   {onLeaveError}
                 </p>
               </div>
-            ) : onLeaveLoading ? (
+            ) : overviewLoading ? (
               <div className={cn("grid gap-3", DASHBOARD_PANEL_BODY)}>
                 {[0, 1, 2].map((item) => (
                   <div
@@ -802,11 +837,11 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="flex min-h-7 flex-wrap items-center gap-2">
-                {unapprovedAbsenceLoading ? (
+                {overviewLoading ? (
                   <div className="bg-ex-surface h-6 w-24 animate-pulse rounded-full" />
                 ) : (
                   <Badge variant={unapprovedNoPunch.length > 0 ? "danger" : "default"}>
-                    {unapprovedNoPunch.length} no punch
+                    {unapprovedNoPunch.length} Absent
                   </Badge>
                 )}
               </div>
@@ -818,7 +853,7 @@ export default function DashboardPage() {
                     {unapprovedAbsenceError}
                   </p>
                 </div>
-              ) : unapprovedAbsenceLoading ? (
+              ) : overviewLoading ? (
                 <div className={cn("grid gap-3", DASHBOARD_PANEL_BODY)}>
                   {[0, 1, 2].map((item) => (
                     <div
@@ -855,13 +890,16 @@ export default function DashboardPage() {
           </Card>
         ) : null}
         {isEmployeeDashboard ? (
-          <AttendanceWidget className="flex h-full flex-col overflow-hidden" />
+          <AttendanceWidget
+            className="flex h-full flex-col overflow-hidden"
+            loading={overviewLoading}
+          />
         ) : null}
       </section>
 
       {!isEmployeeDashboard ? (
         <section className="max-w-xl">
-          <AttendanceWidget />
+          <AttendanceWidget loading={overviewLoading} />
           {/* <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Onboarding vs attrition</CardTitle>
