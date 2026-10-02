@@ -617,16 +617,6 @@ export default function PayrollPage() {
           />
         ) : null}
       </div>
-
-      <p className="text-ex-muted text-sm">
-        Flow: take basic, HRA, organization allowance, loyalty %, PT, and LWF from salary history
-        (same values as salary slips) → working days (Mon–Fri, exclude leave-type holidays) → per
-        day / per hour on gross pay → pro-rate earnings for unpaid leave (U/F; missing/absent
-        scheduled days count as F) → add approved overtime (Accepted on Overtime & Approvals) at the
-        gross hourly rate → deduct loyalty (% of full basic, not working days), PT, LWF, and salary
-        advance recovery. Paid leave (A/H) is not deducted. Attend Days counts P (and half of H/U
-        present portion). Manage advances under Employee → Salary advances.
-      </p>
     </div>
   );
 }

@@ -107,7 +107,7 @@ export function DataTable<T extends { id: string }>({
                   <th
                     key={key}
                     className={cn(
-                      "px-4 py-3 font-medium whitespace-nowrap",
+                      "px-3 py-3 font-medium whitespace-nowrap",
                       c.sticky && stickyColumnClasses[c.sticky].header,
                       c.className,
                     )}
