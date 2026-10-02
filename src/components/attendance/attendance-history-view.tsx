@@ -481,8 +481,22 @@ export function AttendanceHistoryView({
           emptyTitle="No Attendance Records"
           emptyAction={
             isHr && rows.length === 0 ? (
-              <Button variant="outline" className="gap-2" onClick={onImportClick}>
-                <Upload className="size-4" />
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={importing || selectedSheetRow == null}
+                onClick={onImportClick}
+                title={
+                  selectedEmployee
+                    ? `Import attendance CSV for ${selectedEmployee.name}`
+                    : "Select an employee to import attendance CSV"
+                }
+              >
+                {importing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Upload className="size-4" />
+                )}
                 Import CSV
               </Button>
             ) : undefined
