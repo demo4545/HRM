@@ -15,6 +15,7 @@ import {
 import { WorkTimer } from "@/components/attendance/work-timer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   IDEAL_BREAK_HOURS,
   IDEAL_WORKING_HOURS,
@@ -23,6 +24,55 @@ import {
 import { formatDuration, parseDurationToMs } from "@/lib/attendance/time";
 import type { TodayAttendance } from "@/lib/attendance/client";
 import { cn } from "@/lib/utils";
+
+export function PunchDeskSkeleton() {
+  return (
+    <div
+      className="border-ex-border bg-ex-elevated overflow-hidden rounded-2xl border shadow-sm dark:shadow-none"
+      aria-busy
+      aria-live="polite"
+      aria-label="Loading punch desk"
+    >
+      <div className="from-teal-500/15 via-emerald-500/10 relative bg-gradient-to-br to-transparent px-6 pt-6 pb-8 sm:px-8 sm:pt-8 dark:from-teal-400/20 dark:via-emerald-500/10">
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-40 rounded-md" />
+            <div className="flex items-start gap-3">
+              <Skeleton className="size-12 shrink-0 rounded-2xl" />
+              <div className="space-y-2 pt-0.5">
+                <Skeleton className="h-7 w-48 rounded-md sm:w-56" />
+                <Skeleton className="h-4 w-64 max-w-full rounded-md sm:w-80" />
+              </div>
+            </div>
+            <Skeleton className="h-6 w-36 rounded-full" />
+          </div>
+          <div className="flex flex-col items-center gap-3 lg:w-48">
+            <Skeleton className="size-40 rounded-full" />
+            <Skeleton className="h-3 w-20 rounded-md" />
+          </div>
+        </div>
+      </div>
+
+      <div className="border-ex-border bg-ex-elevated space-y-4 border-t p-4 sm:p-6">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="border-ex-border bg-ex-surface/60 space-y-2 rounded-xl border px-3 py-3"
+            >
+              <Skeleton className="h-3 w-16 rounded-md" />
+              <Skeleton className="h-5 w-20 rounded-md" />
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Skeleton className="h-11 w-full rounded-lg sm:max-w-xs" />
+          <Skeleton className="h-9 w-36 rounded-lg sm:ml-auto" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type PunchPhase = "idle" | "working" | "break" | "done";
 type DayOutcome = "short" | "overtime" | "complete";
@@ -252,6 +302,10 @@ export function PunchDesk({
     liveBreakUsedMs ??
     parseDurationToMs(today?.totalBreakTime ?? "") + (onBreak ? liveBreakSessionMs : 0);
 
+  if (loading && !today) {
+    return <PunchDeskSkeleton />;
+  }
+
   return (
     <div className="border-ex-border bg-ex-elevated overflow-hidden rounded-2xl border shadow-sm dark:shadow-none">
       <div
@@ -309,8 +363,13 @@ export function PunchDesk({
           </div>
 
           {loading ? (
-            <div className="flex h-40 items-center justify-center lg:w-48">
-              <Loader2 className="text-ex-muted size-8 animate-spin" />
+            <div
+              className="flex h-40 flex-col items-center justify-center gap-3 lg:w-48"
+              aria-busy
+              aria-label="Refreshing attendance"
+            >
+              <Skeleton className="size-40 rounded-full" />
+              <Skeleton className="h-3 w-20 rounded-md" />
             </div>
           ) : phase === "break" ? (
             <WorkTimer

@@ -212,10 +212,6 @@ export function DashboardAnnouncements({
                       <p className="text-ex-muted text-sm leading-snug whitespace-pre-wrap wrap-break-word">
                         {message}
                       </p>
-                      <div
-                        aria-hidden
-                        className="from-ex-secondary/5 pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t to-transparent"
-                      />
                     </div>
                   ) : null}
                   <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
@@ -224,7 +220,7 @@ export function DashboardAnnouncements({
                       href={viewAllHref}
                       className="text-ex-secondary text-xs font-medium underline-offset-2 hover:underline"
                     >
-                      Read full notice
+                      Read Full Notice
                     </Link>
                   </div>
                 </div>

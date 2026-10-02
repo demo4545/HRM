@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
 import { DateInput } from "@/components/ui/date-input";
 import { useAuth } from "@/contexts/auth-provider";
@@ -27,10 +27,9 @@ import {
   selectOffboardingEmployeeOptions,
 } from "@/store/slices/employee-list-slice";
 
-function formatEmployeeOptionLabel(name: string, employeeId: string, role: string): string {
-  const idPart = employeeId ? ` (${employeeId})` : "";
+function formatEmployeeOptionLabel(name: string, role: string): string {
   const rolePart = role ? ` — ${formatEmployeeRole(role)}` : "";
-  return `${name}${idPart}${rolePart}`;
+  return `${name}${rolePart}`;
 }
 
 export default function OnboardingPage() {
@@ -45,20 +44,36 @@ export default function OnboardingPage() {
   const offboarding = useAppSelector(selectEmployeeOffboarding);
   const employees = useAppSelector((state) => selectOffboardingEmployeeOptions(state, user?.role));
 
-  const canViewInactive = user?.role === ROLES.HR_MANAGER || user?.role === ROLES.SUPER_ADMIN;
+  const { activeEmployees } = useMemo(() => {
+    // HR cannot offboard themselves — hide own profile from the list.
+    const selfSheetRow =
+      user?.role === ROLES.HR_MANAGER && user.sheetRow != null ? String(user.sheetRow) : null;
+    const withoutSelf = selfSheetRow
+      ? employees.filter((employee) => String(employee.sheetRow) !== selfSheetRow)
+      : employees;
+    const active = withoutSelf.filter((e) => !isEmployeeInactive(e.status));
+    return { activeEmployees: active };
+  }, [employees, user]);
 
-  const { activeEmployees, inactiveEmployees } = useMemo(() => {
-    const active = employees.filter((e) => !isEmployeeInactive(e.status));
-    const inactive = canViewInactive ? employees.filter((e) => isEmployeeInactive(e.status)) : [];
-    return { activeEmployees: active, inactiveEmployees: inactive };
-  }, [employees, canViewInactive]);
+  const employeeOptions = useMemo(
+    () =>
+      activeEmployees.map((employee) => ({
+        value: String(employee.sheetRow),
+        label: formatEmployeeOptionLabel(employee.name, employee.role),
+      })),
+    [activeEmployees],
+  );
+
+  const selectedEmployeeValue = employeeOptions.some((option) => option.value === selectedEmployee)
+    ? selectedEmployee
+    : "";
 
   useEffect(() => {
     void dispatch(fetchEmployeeList());
   }, [dispatch]);
 
   const handleOffboard = async () => {
-    if (!selectedEmployee) {
+    if (!selectedEmployeeValue) {
       pushToast({
         title: "Offboarding Failed",
         body: "Please select an employee.",
@@ -94,7 +109,7 @@ export default function OnboardingPage() {
     try {
       await dispatch(
         offboardEmployee({
-          sheetRow: selectedEmployee,
+          sheetRow: selectedEmployeeValue,
           lastWorkingDay: lastWorkingDay.trim(),
           reason: reason.trim(),
         }),
@@ -172,45 +187,22 @@ export default function OnboardingPage() {
           <CardContent className="space-y-3 pt-5">
             <div className="space-y-2">
               <Label htmlFor="offboard-employee">Employee</Label>
-              <Select
+              <SearchableSelect
                 id="offboard-employee"
-                value={selectedEmployee}
-                onChange={(e) => setSelectedEmployee(e.target.value)}
-                disabled={isBusy}
-              >
-                <option value="" disabled>
-                  {loading ? "Loading employees…" : "Select"}
-                </option>
-                {activeEmployees.map((employee) => (
-                  <option key={employee.sheetRow} value={employee.sheetRow}>
-                    {formatEmployeeOptionLabel(employee.name, employee.employeeId, employee.role)}
-                  </option>
-                ))}
-                {inactiveEmployees.length > 0 ? (
-                  <optgroup label="Inactive">
-                    {inactiveEmployees.map((employee) => (
-                      <option
-                        key={employee.sheetRow}
-                        value={employee.sheetRow}
-                        disabled
-                        title="This user is inactive"
-                      >
-                        {formatEmployeeOptionLabel(
-                          employee.name,
-                          employee.employeeId,
-                          employee.role,
-                        )}{" "}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-              </Select>
-              {!loading && employees.length === 0 ? (
-                <p className="text-ex-muted text-sm">No employees found.</p>
+                options={employeeOptions}
+                value={selectedEmployeeValue}
+                onChange={setSelectedEmployee}
+                placeholder={loading ? "Loading Employees…" : "Select"}
+                searchPlaceholder="Search Employee…"
+                emptyMessage="No Matching Employees"
+                disabled={isBusy || loading}
+              />
+              {!loading && activeEmployees.length === 0 ? (
+                <p className="text-ex-muted text-sm">No Employees Found.</p>
               ) : null}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="last-working-day">Last working day</Label>
+              <Label htmlFor="last-working-day">Last Working Day</Label>
               <DateInput
                 id="last-working-day"
                 value={lastWorkingDay}
@@ -240,7 +232,7 @@ export default function OnboardingPage() {
               onClick={() => void handleOffboard()}
             >
               <UserMinus className="size-4" aria-hidden />
-              {offboarding ? "Offboarding…" : "Off board"}
+              {offboarding ? "Offboarding…" : "Off Board"}
             </Button>
           </CardContent>
         </Card>

@@ -153,7 +153,7 @@ export const navStructure: NavItem[] = [
       {
         label: "System Specifications",
         href: "/employee/system-specs",
-        roles: [...HR_AND_STAFF],
+        roles: [...EVERYONE],
       },
       { label: "Complaints", href: "/employee/complaints", roles: [] },
 
@@ -247,11 +247,6 @@ export const navStructure: NavItem[] = [
         roles: [...MANAGERS],
         label: "LAN / Wi-Fi Restriction",
         href: "/settings/network",
-      },
-      {
-        roles: [...MANAGERS],
-        label: "System Specifications",
-        href: "/settings/system-specs",
       },
     ],
   },

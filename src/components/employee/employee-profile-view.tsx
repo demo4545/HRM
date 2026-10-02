@@ -174,7 +174,9 @@ function SystemSpecsCard({
 
   const ramValue = specs?.ramGb?.trim() ? `${specs.ramGb.trim()} GB` : "";
   const logins = specs ? compactLoginList(specs.logins) : [];
-  const hasContent = deviceSections.length > 0 || Boolean(ramValue) || logins.length > 0;
+  const noteValue = specs?.note?.trim() || "";
+  const hasContent =
+    deviceSections.length > 0 || Boolean(ramValue) || logins.length > 0 || Boolean(noteValue);
 
   return (
     <Card>
@@ -229,8 +231,7 @@ function SystemSpecsCard({
                 {logins.map((login, index) => {
                   const user = login.username.trim() || "—";
                   const pass = login.password.trim() || "—";
-                  const label =
-                    logins.length > 1 ? `Login ${index + 1}` : "Login";
+                  const label = logins.length > 1 ? `Login ${index + 1}` : "Login";
                   return (
                     <div key={`login-${index}`} className="flex items-baseline gap-2">
                       <span className="text-ex-muted w-14 shrink-0 text-xs font-medium">
@@ -246,6 +247,14 @@ function SystemSpecsCard({
                 })}
               </div>
             )}
+
+            {noteValue ? (
+              <SpecSection label="Note">
+                <p className="text-ex-primary text-sm leading-relaxed whitespace-pre-wrap wrap-break-word">
+                  {noteValue}
+                </p>
+              </SpecSection>
+            ) : null}
           </div>
         )}
       </CardContent>

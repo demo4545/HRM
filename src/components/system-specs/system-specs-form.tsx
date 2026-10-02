@@ -6,6 +6,7 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DEVICE_FIELDS,
   EMPTY_DEVICE,
@@ -229,6 +230,24 @@ export function SystemSpecsForm({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="border-ex-border space-y-3 rounded-xl border p-4">
+          <p className="text-ex-primary text-sm font-semibold">Note</p>
+          <div className="space-y-1.5">
+            <Label htmlFor="system-specs-note">Additional Notes</Label>
+            <Textarea
+              id="system-specs-note"
+              rows={4}
+              maxLength={2000}
+              value={value.note}
+              placeholder="Add any notes about this workstation (accessories, issues, setup details…)"
+              onChange={(e) => onChange({ ...value, note: e.target.value })}
+            />
+            <p className="text-ex-muted text-xs">
+              This note is visible on the employee profile. {value.note.trim().length}/2000
+            </p>
           </div>
         </div>
       </fieldset>

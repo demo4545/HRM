@@ -8,11 +8,12 @@ import { useRouter } from "next/navigation";
 import { CorrectionForm } from "@/components/attendance/correction-form";
 import { AbsenceExplanationPanel } from "@/components/attendance/absence-explanation-panel";
 import { EarlyLeaveDialog } from "@/components/attendance/early-leave-dialog";
-import { PunchDesk } from "@/components/attendance/punch-desk";
+import { PunchDesk, PunchDeskSkeleton } from "@/components/attendance/punch-desk";
 import { AccessDenied } from "@/components/ui/access-denied";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTodayAttendance } from "@/hooks/use-today-attendance";
 import { useAuth } from "@/contexts/auth-provider";
 import { useNotifications } from "@/contexts/notifications-provider";
@@ -55,8 +56,10 @@ export default function PunchPage() {
     blocked: boolean;
     error: string | null;
   } | null>(() => (showAbsenceGate ? null : { blocked: false, error: null }));
+  const absenceGateChecking = showAbsenceGate && absenceGate === null;
   const absenceGateBlocked = showAbsenceGate && (absenceGate?.blocked ?? true);
   const absenceGateError = showAbsenceGate ? (absenceGate?.error ?? null) : null;
+  const showPunchSkeleton = absenceGateChecking || (!absenceGateBlocked && loading && !today);
 
   const targetMs = (today?.idealHours ?? 8) * 60 * 60 * 1000;
   const shortfallMs = Math.max(0, targetMs - liveWorkedMs);
@@ -118,8 +121,17 @@ export default function PunchPage() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="text-ex-muted size-8 animate-spin" aria-hidden />
+      <div className="w-full space-y-6" aria-busy aria-live="polite" aria-label="Loading punch desk">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-40 rounded-md" />
+          <Skeleton className="h-4 w-72 max-w-full rounded-md" />
+        </div>
+        <div className="border-ex-border space-y-2 rounded-xl border p-4">
+          <Skeleton className="h-5 w-24 rounded-md" />
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <Skeleton className="h-3 w-56 rounded-md" />
+        </div>
+        <PunchDeskSkeleton />
       </div>
     );
   }
@@ -169,7 +181,16 @@ export default function PunchPage() {
         />
       ) : null}
 
-      {showAbsenceGate && absenceGateBlocked ? null : (
+      {showPunchSkeleton ? (
+        <>
+          <div className="border-ex-border space-y-2 rounded-xl border p-4">
+            <Skeleton className="h-5 w-24 rounded-md" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+            <Skeleton className="h-3 w-56 rounded-md" />
+          </div>
+          <PunchDeskSkeleton />
+        </>
+      ) : !absenceGateBlocked ? (
         <>
           {!today?.hasPunchedIn ? (
             <Card>
@@ -277,7 +298,7 @@ export default function PunchPage() {
             </div>
           ) : null}
         </>
-      )}
+      ) : null}
     </div>
   );
 }
