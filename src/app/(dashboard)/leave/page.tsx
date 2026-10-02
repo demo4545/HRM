@@ -575,7 +575,7 @@ export default function LeaveDeskPage() {
                   ? "Loading monthly accrual…"
                   : `${balances?.paid?.used ?? 0} used · ${balances?.paid?.accrued ?? 0}/${balances?.paid?.allocated ?? 12} accrued`
               }
-              badge={`${balancesLoading ? "…" : (balances?.paid?.available ?? 0)} available`}
+              badge={`${balancesLoading ? "…" : (balances?.paid?.available ?? 0)} Available`}
             />
             <BalanceRow
               title="Sick Leave"
@@ -584,7 +584,7 @@ export default function LeaveDeskPage() {
                   ? "Loading quarterly entitlement…"
                   : `${balances?.sick?.remaining ?? 0}/${balances?.sick?.allocated ?? 4} yearly remaining · ${balances?.sick?.expired ?? 0} expired`
               }
-              badge={`${balancesLoading ? "…" : (balances?.sick?.available ?? 0)} this quarter`}
+              badge={`${balancesLoading ? "…" : (balances?.sick?.available ?? 0)} This Quarter`}
             />
             <BalanceRow
               title="Casual Leave"
@@ -593,18 +593,18 @@ export default function LeaveDeskPage() {
                   ? "Loading quarterly entitlement…"
                   : `${balances?.casual?.remaining ?? 0}/${balances?.casual?.allocated ?? 4} yearly remaining · ${balances?.casual?.expired ?? 0} expired`
               }
-              badge={`${balancesLoading ? "…" : (balances?.casual?.available ?? 0)} this quarter`}
+              badge={`${balancesLoading ? "…" : (balances?.casual?.available ?? 0)} This Quarter`}
             />
             <BalanceRow
               title="Birthday Leave"
               detail="One day per calendar year"
-              badge={`${balancesLoading ? "…" : (balances?.birthday?.available ?? 0)} available`}
+              badge={`${balancesLoading ? "…" : (balances?.birthday?.available ?? 0)} Available`}
               badgeVariant="accent"
             />
             <BalanceRow
               title="Unpaid Leave"
               detail="Tracked separately from paid entitlements"
-              badge={`${balancesLoading ? "…" : (balances?.unpaid?.used ?? 0)} used`}
+              badge={`${balancesLoading ? "…" : (balances?.unpaid?.used ?? 0)} Used`}
               badgeVariant="accent"
             />
 

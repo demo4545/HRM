@@ -1,4 +1,4 @@
-import { STATUS } from "@/app/consts/common";
+import { ROLES, STATUS } from "@/app/consts/common";
 import { isEmployeeStatusActive } from "./form";
 import { getSheetHeaders } from "./headers";
 import { EMPLOYEE_SEARCH_KEYS } from "./search";
@@ -142,6 +142,22 @@ function sortIndexedRows(
   });
 }
 
+/** Hide Super Admin accounts from the All Employees directory. */
+export function filterIndexedRowsExcludeSuperAdmin(
+  headers: string[],
+  rows: IndexedSheetRow[],
+): IndexedSheetRow[] {
+  const roleColIndex = headers.map(headerToKey).indexOf("role");
+  if (roleColIndex === -1) return rows;
+
+  return rows.filter((row) => {
+    const role = String(row.values[roleColIndex] ?? "")
+      .trim()
+      .toLowerCase();
+    return role !== ROLES.SUPER_ADMIN;
+  });
+}
+
 export function processEmployeeSheet(params: {
   data: string[][];
   /** When rows come from Firebase, pass real doc sheetRow ids (aligned with data body). */
@@ -154,6 +170,8 @@ export function processEmployeeSheet(params: {
   pageSize?: number;
   /** When true, inactive employees are omitted (non–HR / non–super-admin lists). */
   excludeInactive?: boolean;
+  /** When true, Super Admin accounts are omitted from the directory list. */
+  excludeSuperAdmin?: boolean;
 }): {
   data: string[][];
   sheetRows: number[];
@@ -169,10 +187,14 @@ export function processEmployeeSheet(params: {
     page = 1,
     pageSize = DEFAULT_PAGE_SIZE,
     excludeInactive = false,
+    excludeSuperAdmin = false,
   } = params;
 
   const { headers, rows: indexedRows } = indexSheetBody(data, sheetRowNumbers);
   let rows = indexedRows;
+  if (excludeSuperAdmin) {
+    rows = filterIndexedRowsExcludeSuperAdmin(headers, rows);
+  }
   rows = filterIndexedRows(headers, rows, search);
   if (excludeInactive) {
     rows = filterIndexedRowsActiveOnly(headers, rows);

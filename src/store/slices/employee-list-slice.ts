@@ -7,7 +7,7 @@ import {
   isAccountInactiveRedirectError,
   isAccountInactiveRedirectPending,
 } from "@/lib/account-inactive-client";
-import { parseEmployeeListApiResponse } from "@/lib/employee";
+import { formatEmployeeRoleLabel, parseEmployeeListApiResponse } from "@/lib/employee";
 import type { UserRole } from "@/types/auth";
 import type { Employee, EmployeeStatus } from "@/types/employee";
 
@@ -136,8 +136,7 @@ export function isEmployeeInactive(status: string): boolean {
 }
 
 export function formatEmployeeRole(role: string): string {
-  if (!role) return "";
-  return role.split("_").join(" ");
+  return formatEmployeeRoleLabel(role);
 }
 
 const employeeListSlice = createSlice({

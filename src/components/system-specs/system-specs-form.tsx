@@ -104,9 +104,7 @@ export function SystemSpecsForm({
                     className="border-ex-border space-y-3 rounded-lg border border-dashed p-3"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
-                        {device.label} {index + 1}
-                      </p>
+                      <p className="text-ex-muted text-xs font-medium tracking-wide uppercase"></p>
                       {value[device.key].length > 1 ? (
                         <Button
                           type="button"
@@ -190,9 +188,7 @@ export function SystemSpecsForm({
                 className="border-ex-border space-y-3 rounded-lg border border-dashed p-3"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
-                    Login {index + 1}
-                  </p>
+                  <p className="text-ex-muted text-xs font-medium tracking-wide uppercase"></p>
                   {value.logins.length > 1 ? (
                     <Button
                       type="button"

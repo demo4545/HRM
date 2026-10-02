@@ -21,8 +21,8 @@ export async function notifyComplaintSubmitted(complaint: ComplaintRecord): Prom
       recipientSheetRow: recipient.sheetRow,
       recipientEmployeeId: recipient.employeeId,
       type: NOTIFICATION_TYPES.COMPLAINT_SUBMITTED,
-      title: `New complaint from ${complaint.submitterName}`,
-      body: `${complaint.submitterName} submitted a ${complaint.severity} priority complaint regarding "${complaint.subject}" (${categoryLabel(complaint.category)}).`,
+      title: `New help desk ticket from ${complaint.submitterName}`,
+      body: `${complaint.submitterName} submitted a ${complaint.severity} priority ticket regarding "${complaint.subject}" (${categoryLabel(complaint.category)}).`,
       href: "/complaints",
       dedupeKey: `complaint_submitted:${complaint.id}:${recipient.sheetRow}`,
     })),
@@ -31,7 +31,7 @@ export async function notifyComplaintSubmitted(complaint: ComplaintRecord): Prom
 
 export async function notifyComplaintReviewed(complaint: ComplaintRecord): Promise<void> {
   const approved = complaint.status === "Approved";
-  let body = `Your complaint "${complaint.subject}" has been ${approved ? "approved" : "rejected"}.`;
+  let body = `Your help desk ticket "${complaint.subject}" has been ${approved ? "approved" : "rejected"}.`;
   if (complaint.reviewNote) body += ` Note: ${complaint.reviewNote}`;
 
   await createNotifications([
@@ -41,7 +41,7 @@ export async function notifyComplaintReviewed(complaint: ComplaintRecord): Promi
       type: approved
         ? NOTIFICATION_TYPES.COMPLAINT_APPROVED
         : NOTIFICATION_TYPES.COMPLAINT_REJECTED,
-      title: approved ? "Complaint approved" : "Complaint rejected",
+      title: approved ? "Ticket approved" : "Ticket rejected",
       body,
       href: "/complaints",
       dedupeKey: `complaint_reviewed:${complaint.id}:${complaint.status.toLowerCase()}`,

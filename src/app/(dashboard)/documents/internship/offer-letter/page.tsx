@@ -137,8 +137,8 @@ export default function InternshipOfferLetterPage() {
                   value={form.internshipType}
                   onChange={(e) => update("internshipType", e.target.value as InternshipType)}
                 >
-                  <option value="full-time">Full-time</option>
-                  <option value="part-time">Part-time</option>
+                  <option value="full-time">Full-Time</option>
+                  <option value="part-time">Part-Time</option>
                 </Select>
               </div>
 
@@ -146,7 +146,7 @@ export default function InternshipOfferLetterPage() {
                 <div className="grid gap-2">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="partTimeStart">Working hours start</Label>
+                      <Label htmlFor="partTimeStart">Working Hours Start</Label>
                       <Input
                         id="partTimeStart"
                         type="time"
@@ -155,7 +155,7 @@ export default function InternshipOfferLetterPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="partTimeEnd">Working hours end</Label>
+                      <Label htmlFor="partTimeEnd">Working Hours End</Label>
                       <Input
                         id="partTimeEnd"
                         type="time"

@@ -9,6 +9,7 @@ export {
   type ParentRelationship,
   formatParentRelationshipLabel,
   formatEmployeePositionLabel,
+  formatEmployeeRoleLabel,
   headerToFormKey,
   REQUIRED_EMPLOYEE_FORM_HEADERS,
   ensureRequiredEmployeeFormHeaders,

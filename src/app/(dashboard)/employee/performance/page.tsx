@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { PageHeader } from "@/components/ui/page-header";
-import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { useAuth } from "@/contexts/auth-provider";
@@ -113,6 +113,21 @@ const EMPTY_MIX: NamedCount[] = [{ name: " ", value: 1 }];
 const LEGEND_DIMMED_OPACITY = 0.45;
 const CHART_LEGEND_CLASS = "[&_.recharts-sector]:outline-none [&_.recharts-rectangle]:outline-none";
 
+/** Ensure chart legend / slice labels start each word with a capital letter. */
+function formatMixLabel(value: string): string {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return trimmed;
+  return trimmed
+    .split(/[\s_]+/)
+    .filter(Boolean)
+    .map((part) => {
+      const upper = part.toUpperCase();
+      if (upper === "WFH" || upper === "OT" || upper === "HR") return upper;
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
 type ChartLegendItem = {
   key: string;
   label: string;
@@ -147,7 +162,11 @@ function ChartLegend({
                 aria-hidden
               />
               <span
-                className={isSelected ? "leading-none font-semibold" : "leading-none font-normal"}
+                className={
+                  isSelected
+                    ? "leading-none font-semibold capitalize"
+                    : "leading-none font-normal capitalize"
+                }
               >
                 {item.label}
               </span>
@@ -217,13 +236,21 @@ function MixChart({
 }) {
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const isEmpty = data.length === 0;
-  const chartData = isEmpty ? EMPTY_MIX : data;
+  const chartData = (isEmpty ? EMPTY_MIX : data).map((entry) => ({
+    ...entry,
+    name: formatMixLabel(entry.name) || entry.name,
+  }));
   const visibleData =
     isEmpty || !highlighted ? chartData : chartData.filter((entry) => entry.name === highlighted);
 
   const colorFor = (name: string, index: number) => {
     if (isEmpty) return "var(--ex-border)";
-    return colorByName?.[name] ?? CHART_COLORS[index % CHART_COLORS.length];
+    if (colorByName?.[name]) return colorByName[name];
+    if (colorByName) {
+      const matchedKey = Object.keys(colorByName).find((key) => formatMixLabel(key) === name);
+      if (matchedKey) return colorByName[matchedKey];
+    }
+    return CHART_COLORS[index % CHART_COLORS.length];
   };
 
   const handleSelect = (name: string) => {
@@ -307,8 +334,8 @@ function HoursChart({
   const [highlighted, setHighlighted] = useState<string | null>(null);
 
   const legendItems: ChartLegendItem[] = [
-    { key: "hours", label: "Working hours", color: "var(--ex-chart-1)" },
-    { key: "overtimeHours", label: "Overtime hours", color: "var(--ex-chart-3)" },
+    { key: "hours", label: "Working Hours", color: "var(--ex-chart-1)" },
+    { key: "overtimeHours", label: "Overtime Hours", color: "var(--ex-chart-3)" },
   ];
 
   const handleSelect = (dataKey: string) => {
@@ -432,7 +459,7 @@ export default function EmployeePerformancePage() {
             .filter((e) => e.role.trim().toLowerCase() !== ROLES.SUPER_ADMIN)
             .map((e) => ({
               sheetRow: e.sheetRow,
-              name: `${e.name}${e.employeeId ? ` (${e.employeeId})` : ""}`,
+              name: e.name.trim() || `Employee #${e.sheetRow}`,
             }))
             .sort((a, b) => a.name.localeCompare(b.name)),
         );
@@ -529,17 +556,17 @@ export default function EmployeePerformancePage() {
           <div className="flex flex-wrap items-end gap-2">
             <div className="w-64">
               <label className="text-ex-muted mb-1 block text-xs font-medium">Employee</label>
-              <Select
+              <SearchableSelect
                 value={employeeSheetRow}
-                onChange={(e) => handleEmployeeChange(e.target.value)}
-              >
-                <option value="">Select employee</option>
-                {employees.map((item) => (
-                  <option key={item.sheetRow} value={item.sheetRow}>
-                    {item.name}
-                  </option>
-                ))}
-              </Select>
+                onChange={handleEmployeeChange}
+                placeholder="Select Employee"
+                searchPlaceholder="Search employee…"
+                emptyMessage="No employees found"
+                options={employees.map((item) => ({
+                  value: item.sheetRow,
+                  label: item.name,
+                }))}
+              />
             </div>
             <MonthYearPicker
               year={year}
@@ -576,7 +603,7 @@ export default function EmployeePerformancePage() {
             <Skeleton className="mt-1.5 h-5 w-40" />
           ) : (
             <p className="text-ex-primary mt-0.5 font-semibold">
-              {employee ? `${employee.name} (${employee.employeeId || "—"})` : "—"}
+              {employee ? `${employee.name}` : "—"}
             </p>
           )}
         </div>
@@ -599,7 +626,7 @@ export default function EmployeePerformancePage() {
           )}
         </div>
         <div>
-          <p className="text-ex-muted">Joining date</p>
+          <p className="text-ex-muted">Joining Date</p>
           {loading ? (
             <Skeleton className="mt-1.5 h-5 w-28" />
           ) : (
@@ -619,17 +646,17 @@ export default function EmployeePerformancePage() {
             <StatCard
               label="Working hours"
               value={summary.workedLabel}
-              hint={`Avg ${summary.avgWorkedLabel} / present day`}
+              hint={`Avg ${summary.avgWorkedLabel} / Present Day`}
             />
             <StatCard
               label="Overtime"
               value={summary.overtimeLabel}
-              hint={`${summary.overtimeDays} OT days · approved ${summary.approvedOvertimeLabel}`}
+              hint={`${summary.overtimeDays} OT days · Approved ${summary.approvedOvertimeLabel}`}
             />
             <StatCard
               label="Leave days"
               value={String(summary.leaveDays)}
-              hint={`${data?.leave?.acceptedDays ?? 0} accepted · ${data?.leave?.pendingCount ?? 0} pending`}
+              hint={`${data?.leave?.acceptedDays ?? 0} Accepted · ${data?.leave?.pendingCount ?? 0} Pending`}
             />
             <StatCard label="Completed days" value={String(summary.completedDays)} />
             <StatCard label="Short hours" value={String(summary.shortHoursDays)} />
@@ -645,19 +672,19 @@ export default function EmployeePerformancePage() {
 
       <HoursChart
         data={hoursSeries}
-        title={month == null ? "Working hours by month" : "Working hours by day"}
+        title={month == null ? "Working Hours by Month" : "Working Hours by Day"}
         loading={loading}
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <MixChart title="Work mode" data={summary.workModeMix} loading={loading} />
+        <MixChart title="Work Mode" data={summary.workModeMix} loading={loading} />
         <MixChart
-          title="Attendance status"
+          title="Attendance Status"
           data={summary.statusMix}
           loading={loading}
           colorByName={ATTENDANCE_STATUS_COLORS}
         />
-        <MixChart title="Leave type" data={summary.leaveMix} loading={loading} />
+        <MixChart title="Leave Type" data={summary.leaveMix} loading={loading} />
       </div>
     </div>
   );

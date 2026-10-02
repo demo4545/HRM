@@ -12,9 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/contexts/auth-provider";
 import { useNotifications } from "@/contexts/notifications-provider";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { localTodayIso } from "@/lib/attendance/manual-entry";
+import { canManageEmployees } from "@/lib/auth/roles";
 
 type AnnouncementCategory = "general" | "office_leave" | "important";
 
@@ -63,7 +66,40 @@ function isExpired(expiresAt?: string): boolean {
   return end < localTodayIso();
 }
 
+function AnnouncementListSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="divide-ex-border divide-y" aria-busy aria-label="Loading announcements">
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="space-y-3 px-5 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Skeleton className="h-5 w-48 rounded-md" />
+                <Skeleton className="h-5 w-16 rounded-md" />
+                <Skeleton className="h-5 w-28 rounded-md" />
+              </div>
+              <Skeleton className="h-3 w-72 max-w-full rounded-md" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-6 w-20 rounded-md" />
+              <Skeleton className="h-8 w-14 rounded-md" />
+              <Skeleton className="h-8 w-16 rounded-md" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full rounded-md" />
+            <Skeleton className="h-4 w-11/12 max-w-xl rounded-md" />
+            <Skeleton className="h-4 w-3/4 max-w-md rounded-md" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function AnnouncementsPage() {
+  const { user, loading: authLoading } = useAuth();
+  const canManage = user ? canManageEmployees(user.role) : false;
   const { pushToast } = useNotifications();
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -75,6 +111,8 @@ export default function AnnouncementsPage() {
   const [publishing, setPublishing] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<AnnouncementRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const pageLoading = authLoading || loading;
 
   useEffect(() => {
     let cancelled = false;
@@ -250,162 +288,212 @@ export default function AnnouncementsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Social Announcements"/>
+      <PageHeader title="Social Announcements" />
 
-      <Card className="overflow-hidden">
-        <CardHeader>
-          <CardTitle>{editingId ? "Edit Announcement" : "Compose Announcement"}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2 md:col-span-2">
-            <Label>Title</Label>
-            <Input
-              value={title}
-              maxLength={120}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Notice Type</Label>
-            <Select
-              value={category}
-              onChange={(event) => setCategory(event.target.value as AnnouncementCategory)}
-            >
-              <option value="general">General Message</option>
-              <option value="office_leave">Office Leave</option>
-              <option value="important">Important Notice</option>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Audience</Label>
-            <Input value="All active employees (incl. HR & Super Admin)" disabled />
-          </div>
-          <div className="space-y-2">
-            <Label>Visible Until (End Date)</Label>
-            <Input
-              type="date"
-              value={expiresAt}
-              min={editingId ? undefined : localTodayIso()}
-              onChange={(event) => setExpiresAt(event.target.value)}
-            />
-            <p className="text-ex-muted text-xs">
-              Shown on the dashboard through this date, then hidden automatically.
-            </p>
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <div className="flex items-center justify-between">
-              <Label>Message</Label>
-              <span className="text-ex-muted text-xs">{message.length}/2000</span>
-            </div>
-            <Textarea
-              rows={6}
-              value={message}
-              maxLength={2000}
-              onChange={(event) => setMessage(event.target.value)}
-            />
-          </div>
+      {pageLoading ? (
+        <div className="space-y-8">
+          {canManage || authLoading ? (
+            <Card className="overflow-hidden">
+              <CardHeader>
+                <Skeleton className="h-5 w-44 rounded-md" />
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Skeleton className="h-3 w-12 rounded-md" />
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-20 rounded-md" />
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-16 rounded-md" />
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-28 rounded-md" />
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Skeleton className="h-3 w-16 rounded-md" />
+                  <Skeleton className="h-32 w-full rounded-lg" />
+                </div>
+                <Skeleton className="h-10 w-44 rounded-lg" />
+              </CardContent>
+            </Card>
+          ) : null}
 
-          <div className="flex flex-wrap gap-2 md:col-span-2">
-            <Button
-              className="w-fit"
-              variant="secondary"
-              disabled={publishing}
-              onClick={() => void saveAnnouncement()}
-            >
-              {publishing
-                ? editingId
-                  ? "Saving…"
-                  : "Publishing…"
-                : editingId
-                  ? "Save Changes"
-                  : "Publish To All Employees"}
-            </Button>
-            {editingId ? (
-              <Button
-                className="w-fit"
-                variant="outline"
-                disabled={publishing}
-                onClick={() => resetComposeForm()}
-              >
-                Cancel Edit
-              </Button>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="overflow-hidden">
-        <CardHeader>
-          <CardTitle>Published Announcements</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <p className="text-ex-muted px-5 py-8 text-sm">Loading Announcement History…</p>
-          ) : announcements.length === 0 ? (
-            <div className="px-5 py-10 text-center">
-              <p className="text-ex-primary font-medium">No Announcements Published</p>
-              <p className="text-ex-muted mt-1 text-sm">
-                Published notices will appear here for HR and Super Admin.
-              </p>
-            </div>
-          ) : (
-            <div className="divide-ex-border divide-y">
-              {announcements.map((announcement) => (
-                <article key={announcement.id} className="space-y-3 px-5 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-ex-primary font-semibold">{announcement.title}</h3>
-                        <Badge variant={categoryVariant(announcement.category)}>
-                          {categoryLabel(announcement.category)}
-                        </Badge>
-                        {isExpired(announcement.expiresAt) ? (
-                          <Badge variant="default">Expired</Badge>
-                        ) : (
-                          <Badge variant="accent">Active on dashboard</Badge>
-                        )}
-                      </div>
-                      <p className="text-ex-muted mt-1 text-xs">
-                        Published by {announcement.authorName || "Manager"} ·{" "}
-                        {new Date(announcement.createdAt).toLocaleString()} · Visible Until{" "}
-                        {formatDate(announcement.expiresAt)}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="accent">
-                        {announcement.recipientCount} Recipient
-                        {announcement.recipientCount <= 1 ? "" : "s"}
-                      </Badge>
-                      {!isExpired(announcement.expiresAt) ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={publishing || deleting}
-                          onClick={() => startEdit(announcement)}
-                        >
-                          Edit
-                        </Button>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-red-600"
-                        disabled={publishing || deleting}
-                        onClick={() => setPendingDelete(announcement)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-ex-primary text-sm whitespace-pre-wrap">
-                    {announcement.message}
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <Skeleton className="h-5 w-48 rounded-md" />
+            </CardHeader>
+            <CardContent className="p-0">
+              <AnnouncementListSkeleton rows={3} />
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <>
+          {canManage ? (
+            <Card className="overflow-hidden">
+              <CardHeader>
+                <CardTitle>{editingId ? "Edit Announcement" : "Create Announcement"}</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Title</Label>
+                  <Input
+                    value={title}
+                    maxLength={120}
+                    onChange={(event) => setTitle(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Notice Type</Label>
+                  <Select
+                    value={category}
+                    onChange={(event) => setCategory(event.target.value as AnnouncementCategory)}
+                  >
+                    <option value="general">General Message</option>
+                    <option value="office_leave">Office Leave</option>
+                    <option value="important">Important Notice</option>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Audience</Label>
+                  <Input value="All active employees (incl. HR & Super Admin)" disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label>Active Until</Label>
+                  <Input
+                    type="date"
+                    value={expiresAt}
+                    min={editingId ? undefined : localTodayIso()}
+                    onChange={(event) => setExpiresAt(event.target.value)}
+                  />
+                  <p className="text-ex-muted text-xs">
+                    Shown on the dashboard through this date, then hidden automatically.
                   </p>
-                </article>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Message</Label>
+                    <span className="text-ex-muted text-xs">{message.length}/2000</span>
+                  </div>
+                  <Textarea
+                    rows={6}
+                    value={message}
+                    maxLength={2000}
+                    onChange={(event) => setMessage(event.target.value)}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2 md:col-span-2">
+                  <Button
+                    className="w-fit"
+                    variant="secondary"
+                    disabled={publishing}
+                    onClick={() => void saveAnnouncement()}
+                  >
+                    {publishing
+                      ? editingId
+                        ? "Saving…"
+                        : "Publishing…"
+                      : editingId
+                        ? "Save Changes"
+                        : "Publish To All Employees"}
+                  </Button>
+                  {editingId ? (
+                    <Button
+                      className="w-fit"
+                      variant="outline"
+                      disabled={publishing}
+                      onClick={() => resetComposeForm()}
+                    >
+                      Cancel Edit
+                    </Button>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle>Published Announcements</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {announcements.length === 0 ? (
+                <div className="px-5 py-10 text-center">
+                  <p className="text-ex-primary font-medium">No Announcements Published</p>
+                  <p className="text-ex-muted mt-1 text-sm">
+                    {canManage
+                      ? "Published notices will appear here for HR and Super Admin."
+                      : "Company notices will appear here when HR publishes them."}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-ex-border divide-y">
+                  {announcements.map((announcement) => (
+                    <article key={announcement.id} className="space-y-3 px-5 py-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-ex-primary font-semibold">{announcement.title}</h3>
+                            <Badge variant={categoryVariant(announcement.category)}>
+                              {categoryLabel(announcement.category)}
+                            </Badge>
+                            {isExpired(announcement.expiresAt) ? (
+                              <Badge variant="default">Expired</Badge>
+                            ) : (
+                              <Badge variant="accent">Active On Dashboard</Badge>
+                            )}
+                          </div>
+                          <p className="text-ex-muted mt-1 text-xs">
+                            Published by {announcement.authorName || "Manager"} ·{" "}
+                            {new Date(announcement.createdAt).toLocaleString()} · Visible Until{" "}
+                            {formatDate(announcement.expiresAt)}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="accent">
+                            {announcement.recipientCount} Recipient
+                            {announcement.recipientCount <= 1 ? "" : "s"}
+                          </Badge>
+                          {canManage && !isExpired(announcement.expiresAt) ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={publishing || deleting}
+                              onClick={() => startEdit(announcement)}
+                            >
+                              Edit
+                            </Button>
+                          ) : null}
+                          {canManage ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600"
+                              disabled={publishing || deleting}
+                              onClick={() => setPendingDelete(announcement)}
+                            >
+                              Delete
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                      <p className="text-ex-primary text-sm whitespace-pre-wrap">
+                        {announcement.message}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <ConfirmationDialog
         open={Boolean(pendingDelete)}

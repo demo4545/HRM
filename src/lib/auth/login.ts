@@ -20,6 +20,7 @@ function normalizeUserRole(value: string): UserRole | null {
   if (role === ROLES.SUPER_ADMIN) return ROLES.SUPER_ADMIN;
   if (role === ROLES.HR_MANAGER) return ROLES.HR_MANAGER;
   if (role === ROLES.EMPLOYEE) return ROLES.EMPLOYEE;
+  if (role === ROLES.INTERN) return ROLES.INTERN;
   return null;
 }
 

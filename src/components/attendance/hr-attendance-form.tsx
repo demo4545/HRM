@@ -85,7 +85,7 @@ export function HrAttendanceForm({
     e.preventDefault();
     if (form.date > maxDate) {
       pushToast({
-        title: "Invalid date",
+        title: "Invalid Date",
         body: "Future dates are not allowed. Choose today or an earlier date.",
         variant: "error",
       });
@@ -105,7 +105,7 @@ export function HrAttendanceForm({
     >
       <div>
         <h3 className="text-ex-primary text-base font-semibold">
-          {initialRow ? "Edit attendance" : "Add attendance"}
+          {initialRow ? "Edit Attendance" : "Add Attendance"}
         </h3>
         {employeeLabel ? <p className="text-ex-muted mt-1 text-sm">For {employeeLabel}</p> : null}
       </div>
@@ -126,7 +126,7 @@ export function HrAttendanceForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="hr-attendance-work-mode">Work mode</Label>
+          <Label htmlFor="hr-attendance-work-mode">Work Mode</Label>
           <Select
             id="hr-attendance-work-mode"
             value={form.workMode}
@@ -158,7 +158,7 @@ export function HrAttendanceForm({
         {!punchOptional ? (
           <>
             <div className="space-y-2">
-              <Label htmlFor="hr-attendance-punch-in">Punch in</Label>
+              <Label htmlFor="hr-attendance-punch-in">Punch In</Label>
               <Input
                 id="hr-attendance-punch-in"
                 type="time"
@@ -168,7 +168,7 @@ export function HrAttendanceForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="hr-attendance-punch-out">Punch out</Label>
+              <Label htmlFor="hr-attendance-punch-out">Punch Out</Label>
               <Input
                 id="hr-attendance-punch-out"
                 type="time"
@@ -178,7 +178,7 @@ export function HrAttendanceForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="hr-attendance-break-start">Break start</Label>
+              <Label htmlFor="hr-attendance-break-start">Break Start</Label>
               <Input
                 id="hr-attendance-break-start"
                 type="time"
@@ -188,7 +188,7 @@ export function HrAttendanceForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="hr-attendance-break-end">Break end</Label>
+              <Label htmlFor="hr-attendance-break-end">Break End</Label>
               <Input
                 id="hr-attendance-break-end"
                 type="time"
@@ -209,7 +209,7 @@ export function HrAttendanceForm({
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" disabled={submitting}>
-          {submitting ? "Saving…" : initialRow ? "Update attendance" : "Save attendance"}
+          {submitting ? "Saving…" : initialRow ? "Update Attendance" : "Save Attendance"}
         </Button>
         {onCancel ? (
           <Button

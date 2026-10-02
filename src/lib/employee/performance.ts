@@ -89,7 +89,26 @@ function leaveLabel(workMode: string): string {
   if (workMode === WORK_MODE.UNPAID_LEAVE || workMode === WORK_MODE.HALF_DAY_UNPAID_LEAVE) {
     return "Unpaid";
   }
-  return workMode || "Leave";
+  return titleCaseLabel(workMode || "Leave");
+}
+
+/** Capitalize the first letter of each word for chart legends. */
+function titleCaseLabel(value: string): string {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return trimmed;
+  return trimmed
+    .split(/[\s_]+/)
+    .filter(Boolean)
+    .map((part) => {
+      const upper = part.toUpperCase();
+      if (upper === "WFH" || upper === "OT" || upper === "HR") return upper;
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
+function formatAttendanceStatusLabel(status: string): string {
+  return titleCaseLabel(status);
 }
 
 /** Work-location chart: Onsite vs WFH only (leave/holiday belong in other charts). */
@@ -143,7 +162,7 @@ export function summarizeEmployeePerformance(
     if (!dateIso) continue;
 
     const workMode = canonicalizeWorkMode(record.workMode);
-    const status = String(record.status ?? "").trim() || "Unknown";
+    const status = formatAttendanceStatusLabel(String(record.status ?? "").trim()) || "Unknown";
     const punchIn = String(record.punchIn ?? "").trim();
     const dayWorkedMs = parseDurationToMs(record.workingHours);
     const dayOvertimeMs = parseDurationToMs(record.overtime);

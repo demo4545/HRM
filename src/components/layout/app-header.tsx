@@ -19,6 +19,7 @@ const roleLabel: Record<string, string> = {
   [ROLES.SUPER_ADMIN]: "Super Administrator",
   [ROLES.HR_MANAGER]: "HR Manager",
   [ROLES.EMPLOYEE]: "Employee",
+  [ROLES.INTERN]: "Intern",
 };
 
 function HeaderProfileAvatar({

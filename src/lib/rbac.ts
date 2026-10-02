@@ -7,7 +7,13 @@ import {
   roleCanPunchInOut,
 } from "@/lib/attendance/absence-gate";
 
-const { SUPER_ADMIN, HR_MANAGER, EMPLOYEE } = ROLES;
+const { SUPER_ADMIN, HR_MANAGER, EMPLOYEE, INTERN } = ROLES;
+
+/** Employee-like roles (standard staff + interns). */
+const STAFF = [EMPLOYEE, INTERN] as const;
+const EVERYONE = [SUPER_ADMIN, HR_MANAGER, ...STAFF] as const;
+const MANAGERS = [SUPER_ADMIN, HR_MANAGER] as const;
+const HR_AND_STAFF = [HR_MANAGER, ...STAFF] as const;
 
 export type NavChild = {
   label: string;
@@ -86,68 +92,68 @@ export const navStructure: NavItem[] = [
     label: "Dashboard",
     href: "/dashboard",
     icon: "LayoutDashboard",
-    roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
+    roles: [...EVERYONE],
   },
   {
     label: "Employee",
     href: "/employee",
     icon: "Users",
-    roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
+    roles: [...EVERYONE],
     children: [
       {
-        label: "Punch in / out",
+        label: "Punch In / Out",
         href: "/employee/punch",
-        roles: [HR_MANAGER, EMPLOYEE],
+        roles: [...HR_AND_STAFF],
       },
       {
         label: "All Employees",
         href: "/employee",
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
       },
       {
         label: "Payroll",
         href: "/employee/payroll",
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
       },
       {
         label: "Salary Advances",
         href: "/employee/salary-advances",
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
       },
       {
         label: "Overtime & Approvals",
         href: "/employee/overtime",
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
       },
       {
         label: "Attendance History",
         href: "/employee/attendance",
-        roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
+        roles: [...EVERYONE],
       },
       {
         label: "Expenses",
         href: "/employee/expenses",
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
       },
       {
         label: "Salary Slips",
         href: "/employee/salary-slips",
-        roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
+        roles: [...EVERYONE],
       },
       {
         label: "Performance",
         href: "/employee/performance",
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
       },
       {
         label: "Boarding",
         href: "/employee/onboarding",
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
       },
       {
         label: "System Specifications",
         href: "/employee/system-specs",
-        roles: [HR_MANAGER, EMPLOYEE],
+        roles: [...HR_AND_STAFF],
       },
       { label: "Complaints", href: "/employee/complaints", roles: [] },
 
@@ -159,17 +165,17 @@ export const navStructure: NavItem[] = [
     label: "Documents",
     href: "/documents",
     icon: "FileText",
-    roles: [SUPER_ADMIN, HR_MANAGER],
+    roles: [...MANAGERS],
     children: [
       {
         label: "Employees",
         href: "/documents/employee",
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
       },
       {
         label: "Interns",
         href: "/documents/internship",
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
       },
     ],
   },
@@ -177,15 +183,15 @@ export const navStructure: NavItem[] = [
     label: "Leave",
     href: "/leave",
     icon: "CalendarDays",
-    roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
+    roles: [...EVERYONE],
     children: [
-      { roles: [HR_MANAGER, EMPLOYEE], label: "Leave Desk", href: "/leave" },
+      { roles: [...HR_AND_STAFF], label: "Leave Desk", href: "/leave" },
       {
-        roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
+        roles: [...EVERYONE],
         label: "Company Holidays",
         href: "/leave/holidays",
       },
-      { roles: [SUPER_ADMIN, HR_MANAGER], label: "Approvals & Chain", href: "/leave/approvals" },
+      { roles: [...MANAGERS], label: "Approvals & Chain", href: "/leave/approvals" },
       { roles: [], label: "Early leave", href: "/leave/early-leave" },
       { roles: [], label: "Working vs on leave", href: "/leave/dashboard" },
     ],
@@ -194,7 +200,7 @@ export const navStructure: NavItem[] = [
     label: "Social",
     href: "/notifications/announcements",
     icon: "Megaphone",
-    roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
+    roles: [...EVERYONE],
   },
   // {
   //   label: "Notifications",
@@ -219,11 +225,11 @@ export const navStructure: NavItem[] = [
     label: "Integrations",
     href: "/integrations",
     icon: "Plug",
-    roles: [SUPER_ADMIN, HR_MANAGER],
+    roles: [...MANAGERS],
     children: [
       { roles: [], label: "Overview", href: "/integrations" },
       {
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
         label: "Google Drive",
         href: "/integrations/google-drive",
       },
@@ -235,25 +241,25 @@ export const navStructure: NavItem[] = [
     label: "Access Control",
     href: "/settings/network",
     icon: "Shield",
-    roles: [SUPER_ADMIN, HR_MANAGER],
+    roles: [...MANAGERS],
     children: [
       {
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
         label: "LAN / Wi-Fi Restriction",
         href: "/settings/network",
       },
       {
-        roles: [SUPER_ADMIN, HR_MANAGER],
+        roles: [...MANAGERS],
         label: "System Specifications",
         href: "/settings/system-specs",
       },
     ],
   },
   {
-    label: "Complaints",
+    label: "Help Desk",
     href: "/complaints",
     icon: "MessageSquareWarning",
-    roles: [SUPER_ADMIN, HR_MANAGER, EMPLOYEE],
+    roles: [...EVERYONE],
   },
 ];
 
@@ -320,6 +326,8 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
     }
   }
 
-  if (pathname.startsWith("/integrations") && role === "employee") return false;
+  if (pathname.startsWith("/integrations") && (role === ROLES.EMPLOYEE || role === ROLES.INTERN)) {
+    return false;
+  }
   return true;
 }

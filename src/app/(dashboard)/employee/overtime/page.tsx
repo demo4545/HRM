@@ -34,6 +34,7 @@ function submittedByLabel(role?: string): string {
   if (value === ROLES.HR_MANAGER) return "HR";
   if (value === ROLES.SUPER_ADMIN) return "Super Admin";
   if (value === ROLES.EMPLOYEE) return "Employee";
+  if (value === ROLES.INTERN) return "Intern";
   return value ? value : "Employee";
 }
 

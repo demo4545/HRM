@@ -15,11 +15,11 @@ export function isLeaveDeskRoute(pathname: string): boolean {
 }
 
 export function roleCanPunchInOut(role: UserRole): boolean {
-  return role === ROLES.HR_MANAGER || role === ROLES.EMPLOYEE;
+  return role === ROLES.HR_MANAGER || role === ROLES.EMPLOYEE || role === ROLES.INTERN;
 }
 
 export function roleCanApplyLeave(role: UserRole): boolean {
-  return role === ROLES.HR_MANAGER || role === ROLES.EMPLOYEE;
+  return role === ROLES.HR_MANAGER || role === ROLES.EMPLOYEE || role === ROLES.INTERN;
 }
 
 export function roleRequiresAbsenceExplanationGate(role: UserRole): boolean {

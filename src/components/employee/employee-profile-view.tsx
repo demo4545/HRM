@@ -25,6 +25,8 @@ import {
   maskPan,
   isEmployeeStatusActive,
   resolveProfileImageSrc,
+  formatEmployeePositionLabel,
+  formatEmployeeRoleLabel,
   formatParentRelationshipLabel,
   type EmployeeDocumentField,
   type EmployeeFormState,
@@ -35,16 +37,6 @@ import {
   compactLoginList,
   type SystemSpecsRecord,
 } from "@/lib/system-specs/types";
-
-function formatRole(role: string): string {
-  if (!role) return "—";
-  return role.split("_").join(" ");
-}
-
-function formatPosition(position: string): string {
-  if (!position) return "—";
-  return position.split("_").join(" ");
-}
 
 function formatDate(value: string): string {
   const iso = normalizeDateValue(value);
@@ -338,13 +330,16 @@ export function EmployeeProfileView({
             <ReadOnlyField label="Email" value={form.email || "—"} />
             <ReadOnlyField label="Username" value={form.username || "—"} />
             <ReadOnlyField label="Contact" value={formatPhone(form.contactNumber)} />
-            <ReadOnlyField label="Role" value={formatRole(form.role)} />
-            <ReadOnlyField label="Position" value={formatPosition(form.position)} />
+            <ReadOnlyField label="Role" value={formatEmployeeRoleLabel(form.role) || "—"} />
+            <ReadOnlyField
+              label="Position"
+              value={formatEmployeePositionLabel(form.position) || "—"}
+            />
             <ReadOnlyField label="Birthday" value={formatDate(form.birthdayDate)} />
 
             {isInactive ? (
               <>
-                <ReadOnlyField label="Last working day" value={formatDate(form.lastWorkingDay)} />
+                <ReadOnlyField label="Last Working Day" value={formatDate(form.lastWorkingDay)} />
                 <div className="space-y-2 sm:col-span-2">
                   <Label>Offboard Reason</Label>
                   <Textarea
@@ -444,9 +439,9 @@ export function EmployeeProfileView({
               <CardTitle>Documents</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <DocumentFileRow label="PAN card" field="pancard" storedValue={form.pancard} />
+              <DocumentFileRow label="PAN Card" field="pancard" storedValue={form.pancard} />
               <DocumentFileRow
-                label="Aadhaar card"
+                label="Aadhaar Card"
                 field="aadharCard"
                 storedValue={form.aadharCard}
               />

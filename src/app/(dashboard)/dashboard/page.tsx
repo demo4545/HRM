@@ -368,7 +368,7 @@ function UpcomingHolidayItem({
 export default function DashboardPage() {
   const { user } = useAuth();
   const canManageLeave = user ? canManageEmployees(user.role) : false;
-  const isEmployeeDashboard = user?.role === ROLES.EMPLOYEE;
+  const isEmployeeDashboard = user?.role === ROLES.EMPLOYEE || user?.role === ROLES.INTERN;
   const canShowAttendance = Boolean(user && roleCanPunchInOut(user.role));
   const { loading: attendanceLoading } = useTodayAttendance();
   const [leaveDate, setLeaveDate] = useState(formatIsoDate());

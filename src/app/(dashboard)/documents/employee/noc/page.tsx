@@ -143,7 +143,7 @@ export default function NocPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="date">Certificate date</Label>
+                <Label htmlFor="date">Issue Date</Label>
                 <Input
                   id="date"
                   type="date"

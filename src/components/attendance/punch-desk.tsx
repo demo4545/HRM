@@ -286,11 +286,11 @@ export function PunchDesk({
             </div>
             {showLeaveUnavailable ? (
               <Badge variant="info" className="w-fit gap-1.5">
-                On leave — Punch Blocked
+                On Leave — Punch Blocked
               </Badge>
             ) : leaveOpenSession ? (
               <Badge variant="info" className="w-fit gap-1.5">
-                On leave after this Punch Out
+                On Leave After This Punch Out
               </Badge>
             ) : today?.status && hasPunchedIn ? (
               <Badge variant={statusBadgeVariant(today.status)} className="w-fit">
@@ -369,7 +369,7 @@ export function PunchDesk({
           <StatPill
             label="Punch In"
             value={
-              hasPunchedIn ? (today?.punchIn ?? "") : leavePunchBlocked ? "On leave" : "Not done"
+              hasPunchedIn ? (today?.punchIn ?? "") : leavePunchBlocked ? "On Leave" : "Not Done"
             }
             highlight={hasPunchedIn}
             tone={hasPunchedIn ? "default" : leavePunchBlocked ? "info" : "pending"}
@@ -380,7 +380,7 @@ export function PunchDesk({
             value={
               hasPunchedIn
                 ? isHalfDayLeave
-                  ? "Not allowed"
+                  ? "Not Allowed"
                   : formatDuration(breakUsedMs)
                 : "0h 0m"
             }
@@ -453,7 +453,7 @@ export function PunchDesk({
               ) : (
                 <LogIn className="size-5" />
               )}
-              {actingAction === "punch-in" ? "Starting your day…" : "Punch in — Start my day"}
+              {actingAction === "punch-in" ? "Starting Your Day…" : "Punch In — Start My Day"}
             </Button>
           ) : null}
 
@@ -471,7 +471,7 @@ export function PunchDesk({
                 ) : (
                   <Coffee className="size-5" />
                 )}
-                Take a break
+                Take A Break
               </Button>
               <Button
                 size="lg"
@@ -485,7 +485,7 @@ export function PunchDesk({
                 ) : (
                   <LogOut className="size-5" />
                 )}
-                Punch out
+                Punch Out
               </Button>
             </>
           ) : null}
@@ -502,7 +502,7 @@ export function PunchDesk({
               ) : (
                 <Sparkles className="size-5" />
               )}
-              {actingAction === "break-end" ? "Wrapping up break…" : "Back to work"}
+              {actingAction === "break-end" ? "Wrapping Up Break…" : "Back to Work"}
             </Button>
           ) : null}
 

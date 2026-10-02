@@ -78,24 +78,24 @@ function typeBadgeVariant(type: string): "default" | "success" | "warning" | "da
 
 function typeLabel(type: string): string {
   const labels: Record<string, string> = {
-    leave_submitted: "Leave submitted",
+    leave_submitted: "Leave Submitted",
     leave_submitted_employee: "Submitted",
     leave_approved: "Approved",
     leave_rejected: "Rejected",
-    leave_upcoming: "Upcoming leave",
+    leave_upcoming: "Upcoming Leave",
     employee_birthday: "Birthday",
-    employee_increment_upcoming: "Increment reminder",
+    employee_increment_upcoming: "Increment Reminder",
     announcement: "Announcement",
-    complaint_submitted: "New complaint",
-    complaint_approved: "Complaint approved",
-    complaint_rejected: "Complaint rejected",
-    correction_submitted: "New correction",
+    complaint_submitted: "New Help Desk Ticket",
+    complaint_approved: "Ticket Approved",
+    complaint_rejected: "Ticket Rejected",
+    correction_submitted: "New Correction",
     correction_submitted_employee: "Submitted",
-    correction_approved: "Correction approved",
-    correction_rejected: "Correction rejected",
-    expense_payment_due: "Expense payment pending",
-    expense_payment_overdue: "Expense payment overdue",
-    auto_punch_out: "Auto punch-out",
+    correction_approved: "Correction Approved",
+    correction_rejected: "Correction Rejected",
+    expense_payment_due: "Expense Payment Pending",
+    expense_payment_overdue: "Expense Payment Overdue",
+    auto_punch_out: "Auto Punch Out",
   };
   return labels[type] ?? "Notification";
 }
@@ -177,7 +177,7 @@ export default function NotificationsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Notification Center"
+        title="Notifications"
         description="Stay on top of leave activity, employee milestones, and company updates."
         actions={
           unreadCount > 0 ? (
@@ -188,7 +188,7 @@ export default function NotificationsPage() {
               onClick={() => void markAllRead()}
             >
               <CheckCheck className="size-4" />
-              {markingAll ? "Marking…" : "Mark all read"}
+              {markingAll ? "Marking…" : "Mark All Read"}
             </Button>
           ) : undefined
         }
@@ -202,7 +202,7 @@ export default function NotificationsPage() {
             </div>
             <div>
               <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
-                All notifications
+                All Notifications
               </p>
               <p className="mt-0.5 text-2xl font-semibold">{rows.length}</p>
             </div>
@@ -227,7 +227,7 @@ export default function NotificationsPage() {
               </div>
               <div>
                 <p className="text-ex-muted text-xs font-medium tracking-wide uppercase">
-                  Birthdays this month
+                  Birthdays This Month
                 </p>
                 <p className="mt-0.5 text-2xl font-semibold">{birthdayCount}</p>
               </div>
@@ -245,7 +245,7 @@ export default function NotificationsPage() {
         <Card className="overflow-hidden">
           <div className="border-ex-border flex flex-col gap-4 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="font-semibold">Recent activity</h2>
+              <h2 className="font-semibold">Recent Activity</h2>
               <p className="text-ex-muted mt-0.5 text-sm">Your latest workplace updates</p>
             </div>
             <div className="bg-ex-surface flex w-fit rounded-lg p-1">
@@ -293,7 +293,7 @@ export default function NotificationsPage() {
                 <Inbox className="size-6" />
               </div>
               <p className="mt-4 font-medium">
-                {filter === "unread" ? "You’re all caught up" : "No notifications here"}
+                {filter === "unread" ? "You’re All Caught Up" : "No Notifications Here"}
               </p>
               <p className="text-ex-muted mt-1 max-w-xs text-sm">
                 {filter === "unread"
@@ -363,7 +363,7 @@ export default function NotificationsPage() {
                               })
                             }
                           >
-                            {expanded ? "Show less" : "Read more"}
+                            {expanded ? "Show Less" : "Read More"}
                           </button>
                         ) : null}
                         {row.href && row.href !== "/notifications" ? (
@@ -371,7 +371,7 @@ export default function NotificationsPage() {
                             href={row.href}
                             className="text-ex-accent inline-flex items-center gap-1 text-xs font-medium hover:underline"
                           >
-                            View details <ArrowUpRight className="size-3" />
+                            View Details <ArrowUpRight className="size-3" />
                           </Link>
                         ) : null}
                         {!row.read ? (
@@ -382,7 +382,7 @@ export default function NotificationsPage() {
                             className="text-ex-muted hover:text-ex-primary ml-auto inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium disabled:cursor-wait disabled:opacity-60"
                           >
                             <Check className="size-3.5" />
-                            {markingIds.has(row.id) ? "Marking…" : "Mark as read"}
+                            {markingIds.has(row.id) ? "Marking…" : "Mark As Read"}
                           </button>
                         ) : null}
                       </div>
@@ -404,8 +404,8 @@ export default function NotificationsPage() {
                     <Cake className="size-5" />
                   </div>
                   <div>
-                    <h2 className="font-semibold">Birthdays this month</h2>
-                    <p className="text-ex-muted text-sm">{birthdayCount} remaining</p>
+                    <h2 className="font-semibold">Birthdays This Month</h2>
+                    <p className="text-ex-muted text-sm">{birthdayCount} Remaining</p>
                   </div>
                 </div>
               </div>
@@ -415,7 +415,7 @@ export default function NotificationsPage() {
               {birthdayCount === 0 ? (
                 <div className="px-5 py-10 text-center">
                   <Cake className="text-ex-muted/50 mx-auto size-7" />
-                  <p className="text-ex-muted mt-3 text-sm">No upcoming birthdays this month.</p>
+                  <p className="text-ex-muted mt-3 text-sm">No Upcoming Birthdays This Month.</p>
                 </div>
               ) : (
                 <div className="divide-ex-border divide-y">
