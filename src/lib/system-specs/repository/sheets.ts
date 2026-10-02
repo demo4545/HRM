@@ -29,6 +29,7 @@ const HEADERS = [
   "cpuJson",
   "ramGb",
   "loginsJson",
+  "note",
   "createdAt",
   "updatedAt",
   "updatedBy",
@@ -77,11 +78,15 @@ function singleDevice(name: string, serial: string): DeviceSpec[] {
   return compactDeviceList([{ name, serialNumber: serial }]);
 }
 
-function headerKind(headerRow: string[]): "legacy-flat" | "devices-single-login" | "current" {
+function headerKind(
+  headerRow: string[],
+): "legacy-flat" | "devices-single-login" | "current-no-note" | "current" {
   const col4 = String(headerRow[4] ?? "").trim();
   const col11 = String(headerRow[11] ?? "").trim();
+  const col12 = String(headerRow[12] ?? "").trim();
   if (col4 === "laptopName") return "legacy-flat";
   if (col11 === "loginUsername") return "devices-single-login";
+  if (col11 === "loginsJson" && col12 === "createdAt") return "current-no-note";
   return "current";
 }
 
@@ -105,6 +110,7 @@ function rowToRecordLegacyFlat(row: string[]): SystemSpecsRecord | null {
     logins: compactLoginList(
       normalizeLoginList(undefined, String(row[15] ?? ""), String(row[16] ?? "")),
     ),
+    note: "",
     createdAt: String(row[17] ?? "").trim() || nowIso(),
     updatedAt: String(row[18] ?? "").trim() || nowIso(),
     updatedBy: String(row[19] ?? "").trim(),
@@ -131,9 +137,36 @@ function rowToRecordDevicesSingleLogin(row: string[]): SystemSpecsRecord | null 
     logins: compactLoginList(
       normalizeLoginList(undefined, String(row[11] ?? ""), String(row[12] ?? "")),
     ),
+    note: "",
     createdAt: String(row[13] ?? "").trim() || nowIso(),
     updatedAt: String(row[14] ?? "").trim() || nowIso(),
     updatedBy: String(row[15] ?? "").trim(),
+  };
+}
+
+/** Previous current schema before the note column was added. */
+function rowToRecordNoNote(row: string[]): SystemSpecsRecord | null {
+  const id = String(row[0] ?? "").trim();
+  const employeeSheetRow = Number(row[1] ?? 0);
+  if (!id || !Number.isInteger(employeeSheetRow) || employeeSheetRow < 2) return null;
+
+  return {
+    id,
+    employeeSheetRow,
+    employeeId: String(row[2] ?? "").trim(),
+    employeeName: String(row[3] ?? "").trim(),
+    laptop: parseDevicesJson(String(row[4] ?? "")),
+    desktop: parseDevicesJson(String(row[5] ?? "")),
+    screen: parseDevicesJson(String(row[6] ?? "")),
+    keyboard: parseDevicesJson(String(row[7] ?? "")),
+    mouse: parseDevicesJson(String(row[8] ?? "")),
+    cpu: parseDevicesJson(String(row[9] ?? "")),
+    ramGb: String(row[10] ?? "").trim(),
+    logins: parseLoginsJson(String(row[11] ?? "")),
+    note: "",
+    createdAt: String(row[12] ?? "").trim() || nowIso(),
+    updatedAt: String(row[13] ?? "").trim() || nowIso(),
+    updatedBy: String(row[14] ?? "").trim(),
   };
 }
 
@@ -155,9 +188,10 @@ function rowToRecord(row: string[]): SystemSpecsRecord | null {
     cpu: parseDevicesJson(String(row[9] ?? "")),
     ramGb: String(row[10] ?? "").trim(),
     logins: parseLoginsJson(String(row[11] ?? "")),
-    createdAt: String(row[12] ?? "").trim() || nowIso(),
-    updatedAt: String(row[13] ?? "").trim() || nowIso(),
-    updatedBy: String(row[14] ?? "").trim(),
+    note: String(row[12] ?? "").trim(),
+    createdAt: String(row[13] ?? "").trim() || nowIso(),
+    updatedAt: String(row[14] ?? "").trim() || nowIso(),
+    updatedBy: String(row[15] ?? "").trim(),
   };
 }
 
@@ -175,6 +209,7 @@ function recordToRow(record: SystemSpecsRecord): string[] {
     devicesToJson(record.cpu),
     record.ramGb,
     loginsToJson(record.logins),
+    record.note ?? "",
     record.createdAt,
     record.updatedAt,
     record.updatedBy,
@@ -248,6 +283,16 @@ async function ensureSheet(): Promise<void> {
         .map((row) => rowToRecordDevicesSingleLogin(row))
         .filter((row): row is SystemSpecsRecord => row != null);
       await rewriteSheet(records);
+    } else if (kind === "current-no-note") {
+      const dataResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_RANGE}!A2:O`,
+      });
+      const rows = (dataResponse.data.values as string[][] | undefined) ?? [];
+      const records = rows
+        .map((row) => rowToRecordNoNote(row))
+        .filter((row): row is SystemSpecsRecord => row != null);
+      await rewriteSheet(records);
     } else {
       const headersMatch = HEADERS.every(
         (header, index) => String(headerRow[index] ?? "").trim() === header,
@@ -275,7 +320,7 @@ async function readAllRows(): Promise<{ records: SystemSpecsRecord[]; sheetRows:
   await ensureSheet();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_RANGE}!A2:O`,
+    range: `${SHEET_RANGE}!A2:P`,
   });
   const rows = (response.data.values as string[][] | undefined) ?? [];
   const records: SystemSpecsRecord[] = [];
@@ -347,6 +392,10 @@ export async function upsertSystemSpecsSheets(
       input.logins !== undefined
         ? compactLoginList(input.logins)
         : compactLoginList(existing?.logins),
+    note:
+      input.note !== undefined
+        ? String(input.note).trim().slice(0, 2000)
+        : String(existing?.note ?? "").trim(),
     createdAt: existing?.createdAt || timestamp,
     updatedAt: timestamp,
     updatedBy: updatedBy.trim(),
@@ -358,14 +407,14 @@ export async function upsertSystemSpecsSheets(
     const targetRow = sheetRows[existingIndex];
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${SHEET_RANGE}!A${targetRow}:O${targetRow}`,
+      range: `${SHEET_RANGE}!A${targetRow}:P${targetRow}`,
       valueInputOption: "RAW",
       requestBody: { values },
     });
   } else {
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: `${SHEET_RANGE}!A:O`,
+      range: `${SHEET_RANGE}!A:P`,
       valueInputOption: "RAW",
       insertDataOption: "INSERT_ROWS",
       requestBody: { values },

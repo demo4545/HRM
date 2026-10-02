@@ -143,6 +143,12 @@ function normalizeWorkMode(value: string): string {
 
   if (compact.includes("wfh") && compact.includes("hd")) return WORK_MODE.WFH_HALF_DAY;
   if (compact === "wfh") return WORK_MODE.WFH;
+  if (
+    compact.includes("half day onsite") ||
+    (compact.includes("onsite") && (compact.includes("half") || compact.includes("hd")))
+  ) {
+    return WORK_MODE.HALF_DAY_ONSITE;
+  }
   if (compact.includes("half day unpaid") || compact === "half day leave") {
     return WORK_MODE.HALF_DAY_UNPAID_LEAVE;
   }

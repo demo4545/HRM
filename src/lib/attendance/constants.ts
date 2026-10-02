@@ -62,36 +62,27 @@ export const WORK_MODE = {
   PUBLIC_HOLIDAY: "Public Holiday",
   WEEKEND_HOLIDAY: "Weekend Holiday",
   FULL_DAY_ONSITE: "Full Day Onsite",
+  HALF_DAY_ONSITE: "Half Day Onsite",
 } as const;
 
 export const WORK_MODE_OPTIONS = [
   WORK_MODE.WFH,
   WORK_MODE.WFH_HALF_DAY,
-  WORK_MODE.PAID_LEAVE,
-  WORK_MODE.SICK_LEAVE,
-  WORK_MODE.CASUAL_LEAVE,
-  WORK_MODE.UNPAID_LEAVE,
-  WORK_MODE.HALF_DAY_PAID_LEAVE,
-  WORK_MODE.HALF_DAY_UNPAID_LEAVE,
-  WORK_MODE.PUBLIC_HOLIDAY,
-  WORK_MODE.WEEKEND_HOLIDAY,
+  // WORK_MODE.HALF_DAY_PAID_LEAVE,
+  // WORK_MODE.HALF_DAY_UNPAID_LEAVE,
   WORK_MODE.FULL_DAY_ONSITE,
+  WORK_MODE.HALF_DAY_ONSITE,
 ] as const;
 
 export type WorkMode = (typeof WORK_MODE_OPTIONS)[number];
 
 export const WORK_MODE_DAY_CODE: Record<WorkMode, "P" | "A" | "H" | "U" | "F"> = {
   [WORK_MODE.FULL_DAY_ONSITE]: "P",
+  [WORK_MODE.HALF_DAY_ONSITE]: "P",
   [WORK_MODE.WFH]: "P",
-  [WORK_MODE.PUBLIC_HOLIDAY]: "P",
-  [WORK_MODE.WEEKEND_HOLIDAY]: "P",
-  [WORK_MODE.PAID_LEAVE]: "A",
-  [WORK_MODE.SICK_LEAVE]: "A",
-  [WORK_MODE.CASUAL_LEAVE]: "A",
-  [WORK_MODE.HALF_DAY_PAID_LEAVE]: "H",
-  [WORK_MODE.HALF_DAY_UNPAID_LEAVE]: "U",
+  // [WORK_MODE.HALF_DAY_PAID_LEAVE]: "H",
+  // [WORK_MODE.HALF_DAY_UNPAID_LEAVE]: "U",
   [WORK_MODE.WFH_HALF_DAY]: "U",
-  [WORK_MODE.UNPAID_LEAVE]: "F",
 };
 
 /**
@@ -108,6 +99,9 @@ export function canonicalizeWorkMode(value: string): string {
   if (key === "full day leave") return WORK_MODE.UNPAID_LEAVE;
   if (key === "half day leave") return WORK_MODE.HALF_DAY_UNPAID_LEAVE;
   if (key === "sl") return WORK_MODE.SICK_LEAVE;
+  if (key === "half day onsite" || key === "hd onsite" || key === "onsite - hd") {
+    return WORK_MODE.HALF_DAY_ONSITE;
+  }
 
   const known = WORK_MODE_OPTIONS.find((mode) => mode.toLowerCase() === key);
   if (known) return known;
@@ -119,20 +113,21 @@ export function canonicalizeWorkMode(value: string): string {
 export function workModeOptionLabel(mode: string): string {
   const canonical = canonicalizeWorkMode(mode);
   const code = WORK_MODE_DAY_CODE[canonical as WorkMode];
-  return code ? `${canonical} (${code})` : canonical || mode;
+  return code ? canonical : canonical || mode;
 }
 
 export function isHalfDayUnpaidWorkMode(value?: string | null): boolean {
   return canonicalizeWorkMode(value ?? "") === WORK_MODE.HALF_DAY_UNPAID_LEAVE;
 }
 
-/** Any half-day leave / WFH-HD mode — required work target is HALF_DAY_WORKING_HOURS. */
+/** Any half-day leave / WFH-HD / half-day onsite — required work target is HALF_DAY_WORKING_HOURS. */
 export function isHalfDayWorkMode(value?: string | null): boolean {
   const mode = canonicalizeWorkMode(value ?? "");
   return (
     mode === WORK_MODE.HALF_DAY_PAID_LEAVE ||
     mode === WORK_MODE.HALF_DAY_UNPAID_LEAVE ||
-    mode === WORK_MODE.WFH_HALF_DAY
+    mode === WORK_MODE.WFH_HALF_DAY ||
+    mode === WORK_MODE.HALF_DAY_ONSITE
   );
 }
 

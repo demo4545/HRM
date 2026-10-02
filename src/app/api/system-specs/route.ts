@@ -37,6 +37,7 @@ function parseBodyFields(body: Record<string, unknown>): Omit<SystemSpecsInput, 
     cpu: parseDeviceList(body.cpu),
     ramGb: body.ramGb != null ? String(body.ramGb).trim() : undefined,
     logins: parseLoginList(body.logins),
+    note: body.note != null ? String(body.note).trim().slice(0, 2000) : undefined,
   };
 }
 

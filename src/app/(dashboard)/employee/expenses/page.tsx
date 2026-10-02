@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { PageHeader } from "@/components/ui/page-header";
+import { DEFAULT_PAGE_SIZE, Pagination } from "@/components/ui/pagination";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Select } from "@/components/ui/select";
 import { StatCard } from "@/components/ui/stat-card";
@@ -137,6 +138,7 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [summary, setSummary] = useState<ExpenseSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -190,6 +192,7 @@ export default function ExpensesPage() {
     if (nextYear == null) return;
     setYear(nextYear);
     setMonth(nextMonth);
+    setPage(1);
   }
 
   const loadExpenses = useCallback(async () => {
@@ -427,11 +430,19 @@ export default function ExpensesPage() {
         status: expense.status,
         notes:
           expense.status === EXPENSE_STATUS.REJECTED && expense.rejectionReason
-            ? `Rejected: ${expense.rejectionReason}`
+            ? expense.rejectionReason
             : expense.notes || "—",
         createdBy: expense.createdBy || "—",
       })),
     [expenses],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(tableRows.length / DEFAULT_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedRows = useMemo(
+    () =>
+      tableRows.slice((currentPage - 1) * DEFAULT_PAGE_SIZE, currentPage * DEFAULT_PAGE_SIZE),
+    [tableRows, currentPage],
   );
 
   const columns: Column<TableRow>[] = useMemo(
@@ -588,7 +599,10 @@ export default function ExpensesPage() {
             type="button"
             size="md"
             variant={typeFilter === tab.value ? "primary" : "outline"}
-            onClick={() => setTypeFilter(tab.value)}
+            onClick={() => {
+              setTypeFilter(tab.value);
+              setPage(1);
+            }}
             disabled={loading || saving}
             className="h-10 w-36"
           >
@@ -888,14 +902,26 @@ export default function ExpensesPage() {
         <CardHeader className="border-0 pb-0">
           <CardTitle className={cn("text-ex-secondary text-base")}>Expense List</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <DataTable
             columns={columns}
-            rows={tableRows}
+            rows={paginatedRows}
             loading={loading}
             emptyTitle="No Expenses Found"
             emptyDescription="No expenses match this type, month, and year filter."
           />
+          {!loading && tableRows.length > DEFAULT_PAGE_SIZE ? (
+            <Pagination
+              pagination={{
+                page: currentPage,
+                totalPages,
+                total: tableRows.length,
+                pageSize: DEFAULT_PAGE_SIZE,
+              }}
+              onPageChange={setPage}
+              itemLabel="Expenses"
+            />
+          ) : null}
         </CardContent>
       </Card>
 

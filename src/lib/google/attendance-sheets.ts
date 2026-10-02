@@ -846,15 +846,19 @@ async function applyWorkModeDropdownByTitle(
 
   const workModeColumnStart = ATTENDANCE_COL.workMode;
   const workModeColumnEnd = ATTENDANCE_COL.workMode + 1;
-  const hasRulesAlready = (targetSheet?.conditionalFormats ?? []).some((rule) => {
+  const existingFormats = targetSheet?.conditionalFormats ?? [];
+  const workModeRuleIndexes: number[] = [];
+  existingFormats.forEach((rule, index) => {
     const range = rule.ranges?.[0];
     const condition = rule.booleanRule?.condition;
-    return (
+    if (
       range?.sheetId === sheetId &&
       range.startColumnIndex === workModeColumnStart &&
       range.endColumnIndex === workModeColumnEnd &&
       condition?.type === "TEXT_EQ"
-    );
+    ) {
+      workModeRuleIndexes.push(index);
+    }
   });
 
   const workModeColors: Record<string, { red: number; green: number; blue: number }> = {
@@ -865,10 +869,23 @@ async function applyWorkModeDropdownByTitle(
     [WORK_MODE.PUBLIC_HOLIDAY]: { red: 0.95, green: 0.88, blue: 1 },
     [WORK_MODE.WEEKEND_HOLIDAY]: { red: 0.92, green: 0.92, blue: 0.92 },
     [WORK_MODE.FULL_DAY_ONSITE]: { red: 0.86, green: 0.97, blue: 0.89 },
+    [WORK_MODE.HALF_DAY_ONSITE]: { red: 0.78, green: 0.94, blue: 0.82 },
+    [WORK_MODE.HALF_DAY_PAID_LEAVE]: { red: 0.9, green: 0.97, blue: 0.9 },
     [WORK_MODE.HALF_DAY_UNPAID_LEAVE]: { red: 1, green: 0.95, blue: 0.83 },
+    [WORK_MODE.CASUAL_LEAVE]: { red: 1, green: 0.93, blue: 0.88 },
+    [WORK_MODE.PAID_LEAVE]: { red: 0.88, green: 0.95, blue: 0.88 },
   };
 
+  const defaultColor = { red: 0.95, green: 0.95, blue: 0.95 };
+
   const requests = [
+    // Delete highest indexes first so remaining indexes stay valid.
+    ...workModeRuleIndexes
+      .slice()
+      .sort((a, b) => b - a)
+      .map((index) => ({
+        deleteConditionalFormatRule: { sheetId, index },
+      })),
     {
       setDataValidation: {
         range: {
@@ -887,33 +904,31 @@ async function applyWorkModeDropdownByTitle(
         },
       },
     },
-    ...(!hasRulesAlready
-      ? WORK_MODE_OPTIONS.map((mode, index) => ({
-          addConditionalFormatRule: {
-            index,
-            rule: {
-              ranges: [
-                {
-                  sheetId,
-                  startRowIndex: 1,
-                  startColumnIndex: workModeColumnStart,
-                  endColumnIndex: workModeColumnEnd,
-                },
-              ],
-              booleanRule: {
-                condition: {
-                  type: "TEXT_EQ",
-                  values: [{ userEnteredValue: mode }],
-                },
-                format: {
-                  backgroundColor: workModeColors[mode],
-                  textFormat: { bold: true },
-                },
-              },
+    ...WORK_MODE_OPTIONS.map((mode, index) => ({
+      addConditionalFormatRule: {
+        index,
+        rule: {
+          ranges: [
+            {
+              sheetId,
+              startRowIndex: 1,
+              startColumnIndex: workModeColumnStart,
+              endColumnIndex: workModeColumnEnd,
+            },
+          ],
+          booleanRule: {
+            condition: {
+              type: "TEXT_EQ",
+              values: [{ userEnteredValue: mode }],
+            },
+            format: {
+              backgroundColor: workModeColors[mode] ?? defaultColor,
+              textFormat: { bold: true },
             },
           },
-        }))
-      : []),
+        },
+      },
+    })),
   ];
 
   await sheetsApi.spreadsheets.batchUpdate({

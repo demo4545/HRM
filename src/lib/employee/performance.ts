@@ -113,7 +113,9 @@ function formatAttendanceStatusLabel(status: string): string {
 
 /** Work-location chart: Onsite vs WFH only (leave/holiday belong in other charts). */
 function workLocationGroup(workMode: string): "Onsite" | "WFH" | null {
-  if (workMode === WORK_MODE.FULL_DAY_ONSITE) return "Onsite";
+  if (workMode === WORK_MODE.FULL_DAY_ONSITE || workMode === WORK_MODE.HALF_DAY_ONSITE) {
+    return "Onsite";
+  }
   if (workMode === WORK_MODE.WFH || workMode === WORK_MODE.WFH_HALF_DAY) return "WFH";
   return null;
 }
@@ -177,7 +179,7 @@ export function summarizeEmployeePerformance(
       bump(
         workModeMap,
         location,
-        workMode === WORK_MODE.WFH_HALF_DAY ? 0.5 : 1,
+        workMode === WORK_MODE.WFH_HALF_DAY || workMode === WORK_MODE.HALF_DAY_ONSITE ? 0.5 : 1,
       );
     }
     bump(statusMap, status);

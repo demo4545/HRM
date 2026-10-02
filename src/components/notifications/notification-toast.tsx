@@ -47,7 +47,7 @@ export function NotificationToastStack({
               <div className="min-w-0 flex-1">
                 <p
                   className={cn(
-                    "text-sm font-semibold",
+                    "line-clamp-2 text-sm font-semibold break-words",
                     variant === "default" && "text-ex-primary",
                     variant === "error" && "text-ex-banner-danger-fg",
                     variant === "success" && "text-ex-chip-success-fg",
@@ -57,7 +57,7 @@ export function NotificationToastStack({
                 </p>
                 <p
                   className={cn(
-                    "mt-1 text-sm",
+                    "mt-1 line-clamp-3 text-sm break-words",
                     variant === "default" && "text-ex-muted",
                     variant === "error" && "text-ex-banner-danger-fg",
                     variant === "success" && "text-ex-chip-success-fg",

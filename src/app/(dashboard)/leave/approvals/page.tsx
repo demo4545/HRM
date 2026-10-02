@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { DEFAULT_PAGE_SIZE, Pagination } from "@/components/ui/pagination";
-import { RefreshCw } from "lucide-react";
+import { Check, Loader2, RefreshCw, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { LEAVE_STATUS } from "@/lib/attendance/leave-status";
@@ -141,6 +141,7 @@ export default function LeaveApprovalsPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [rows, setRows] = useState<LeaveApprovalRow[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [reviewingStatus, setReviewingStatus] = useState<"Accepted" | "Rejected" | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [rejectReason, setRejectReason] = useState("");
@@ -148,38 +149,46 @@ export default function LeaveApprovalsPage() {
   const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
   const [bulkRejectReason, setBulkRejectReason] = useState("");
 
-  const loadApprovals = useCallback(async () => {
-    setLoading(true);
-    setWarnings([]);
-    try {
-      const query = statusFilter === "all" ? "all" : statusFilter;
-      const res = await fetch(`/api/employee/leaves/approvals?status=${encodeURIComponent(query)}`);
-      const data = await readResponseJson<{
-        success?: boolean;
-        message?: string;
-        applications?: LeaveApprovalRow[];
-        warnings?: string[];
-      }>(res, "fetch");
+  const loadApprovals = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) setLoading(true);
+      setWarnings([]);
+      try {
+        const query = statusFilter === "all" ? "all" : statusFilter;
+        const res = await fetch(
+          `/api/employee/leaves/approvals?status=${encodeURIComponent(query)}`,
+          { cache: "no-store" },
+        );
+        const data = await readResponseJson<{
+          success?: boolean;
+          message?: string;
+          applications?: LeaveApprovalRow[];
+          warnings?: string[];
+        }>(res, "fetch");
 
-      if (!data.success) {
-        throw new Error(data.message ?? "Failed to load approvals");
+        if (!data.success) {
+          throw new Error(data.message ?? "Failed to load approvals");
+        }
+
+        setRows(sortApprovalsByDate(data.applications ?? []));
+        setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
+        setSelectedIds(new Set());
+      } catch (err) {
+        pushToast({
+          title: "Could not load approvals",
+          body: toUserFacingFetchError(err),
+          variant: "error",
+        });
+        if (!options?.silent) {
+          setRows([]);
+          setSelectedIds(new Set());
+        }
+      } finally {
+        if (!options?.silent) setLoading(false);
       }
-
-      setRows(sortApprovalsByDate(data.applications ?? []));
-      setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
-      setSelectedIds(new Set());
-    } catch (err) {
-      pushToast({
-        title: "Could not load approvals",
-        body: toUserFacingFetchError(err),
-        variant: "error",
-      });
-      setRows([]);
-      setSelectedIds(new Set());
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, pushToast]);
+    },
+    [statusFilter, pushToast],
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -242,25 +251,50 @@ export default function LeaveApprovalsPage() {
     });
   }
 
+  const applyLocalReview = useCallback(
+    (rowId: string, status: "Accepted" | "Rejected", reason = "") => {
+      setRows((prev) => {
+        // Pending tab should drop the row immediately after review.
+        if (statusFilter === LEAVE_STATUS.APPLIED) {
+          return prev.filter((row) => row.id !== rowId);
+        }
+        return prev.map((row) =>
+          row.id === rowId
+            ? {
+                ...row,
+                status,
+                rejectReason: status === "Rejected" ? reason : row.rejectReason,
+              }
+            : row,
+        );
+      });
+      setSelectedIds((prev) => {
+        if (!prev.has(rowId)) return prev;
+        const next = new Set(prev);
+        next.delete(rowId);
+        return next;
+      });
+    },
+    [statusFilter],
+  );
+
   const reviewApplication = async (
     row: LeaveApprovalRow,
     status: "Accepted" | "Rejected",
     reason = "",
   ) => {
     setReviewingId(row.id);
+    setReviewingStatus(status);
     try {
       const data = await reviewLeaveRequest(row, status, reason);
 
       setRejectingRow(null);
       setRejectReason("");
-      setSelectedIds((prev) => {
-        if (!prev.has(row.id)) return prev;
-        const next = new Set(prev);
-        next.delete(row.id);
-        return next;
-      });
-      await loadApprovals();
-      await refreshNotifications();
+      applyLocalReview(row.id, status, reason.trim());
+      // Soft refresh — avoid replacing the table with a skeleton; optimistic update
+      // already reflects the change if Sheets lag briefly.
+      void loadApprovals({ silent: true });
+      void refreshNotifications();
 
       const emailSent = data.email?.sent === true;
       const emailNote =
@@ -284,6 +318,7 @@ export default function LeaveApprovalsPage() {
       });
     } finally {
       setReviewingId(null);
+      setReviewingStatus(null);
     }
   };
 
@@ -321,7 +356,24 @@ export default function LeaveApprovalsPage() {
 
     setSelectedIds(new Set());
     setBulkRejectReason("");
-    await loadApprovals();
+    // Drop reviewed pending rows immediately, then soft-refresh from server.
+    const targetIds = new Set(targets.map((row) => row.id));
+    if (statusFilter === LEAVE_STATUS.APPLIED) {
+      setRows((prev) => prev.filter((row) => !targetIds.has(row.id)));
+    } else {
+      setRows((prev) =>
+        prev.map((row) =>
+          targetIds.has(row.id)
+            ? {
+                ...row,
+                status,
+                rejectReason: status === "Rejected" ? reason : row.rejectReason,
+              }
+            : row,
+        ),
+      );
+    }
+    await loadApprovals({ silent: true });
     await refreshNotifications();
     setBulkBusy(false);
 
@@ -466,9 +518,19 @@ export default function LeaveApprovalsPage() {
             <Button
               variant="secondary"
               onClick={() => void submitReject()}
-              disabled={actionsBusy}
+              disabled={actionsBusy || !rejectReason.trim()}
             >
-              {reviewingId === rejectingRow.id ? "Rejecting..." : "Confirm Reject"}
+              {reviewingId === rejectingRow.id && reviewingStatus === "Rejected" ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Rejecting…
+                </>
+              ) : (
+                <>
+                  <X className="size-4" aria-hidden />
+                  Confirm Reject
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -557,7 +619,17 @@ export default function LeaveApprovalsPage() {
                             disabled={actionsBusy}
                             onClick={() => void reviewApplication(r, "Accepted")}
                           >
-                            {reviewingId === r.id ? "..." : "Accept"}
+                            {reviewingId === r.id && reviewingStatus === "Accepted" ? (
+                              <>
+                                <Loader2 className="size-4 animate-spin" aria-hidden />
+                                Accepting…
+                              </>
+                            ) : (
+                              <>
+                                <Check className="size-4" aria-hidden />
+                                Accept
+                              </>
+                            )}
                           </Button>
                           <Button
                             size="sm"
@@ -568,6 +640,7 @@ export default function LeaveApprovalsPage() {
                               setRejectReason("");
                             }}
                           >
+                            <X className="size-4" aria-hidden />
                             Reject
                           </Button>
                         </div>

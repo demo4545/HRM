@@ -35,6 +35,7 @@ function docToRecord(id: string, data: Record<string, unknown>): SystemSpecsReco
     cpu: normalizeDeviceList(data.cpu),
     ramGb: String(data.ramGb ?? "").trim(),
     logins: normalizeLoginList(data.logins, data.loginUsername, data.loginPassword),
+    note: String(data.note ?? "").trim(),
     createdAt: String(data.createdAt ?? "").trim() || nowIso(),
     updatedAt: String(data.updatedAt ?? "").trim() || nowIso(),
     updatedBy: String(data.updatedBy ?? "").trim(),
@@ -111,6 +112,10 @@ export async function upsertSystemSpecsFirestore(
     cpu: pickDevices(input, prev, "cpu"),
     ramGb: String(input.ramGb ?? prev.ramGb ?? "").trim(),
     logins,
+    note:
+      input.note !== undefined
+        ? String(input.note).trim().slice(0, 2000)
+        : String(prev.note ?? "").trim(),
     createdAt: String(prev.createdAt ?? "").trim() || timestamp,
     updatedAt: timestamp,
     updatedBy: updatedBy.trim(),

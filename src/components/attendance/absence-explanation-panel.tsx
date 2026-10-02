@@ -12,6 +12,7 @@ import { ABSENCE_EXPLANATION_MIN_LENGTH } from "@/lib/attendance/constants";
 import { setAbsenceGateSessionHint } from "@/lib/attendance/absence-gate-session";
 import { apiResponseErrorMessage, parseJsonResponse } from "@/lib/api/json-response";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
+import { PunchDeskSkeleton } from "./punch-desk";
 
 type LeaveTypeOption = "sick" | "casual";
 
@@ -293,12 +294,7 @@ export function AbsenceExplanationPanel({
 
   if (loading) {
     return (
-      <Card className="border-ex-border">
-        <CardContent className="text-ex-muted flex items-center justify-center gap-2 py-10 text-sm">
-          <Loader2 className="size-4 animate-spin" aria-hidden />
-          Checking Attendance...
-        </CardContent>
-      </Card>
+      <PunchDeskSkeleton />
     );
   }
 

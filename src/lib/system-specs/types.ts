@@ -21,6 +21,7 @@ export type SystemSpecsRecord = {
   cpu: DeviceSpec[];
   ramGb: string;
   logins: LoginCredential[];
+  note: string;
   createdAt: string;
   updatedAt: string;
   updatedBy: string;
@@ -38,6 +39,7 @@ export type SystemSpecsInput = {
   cpu?: DeviceSpec[];
   ramGb?: string;
   logins?: LoginCredential[];
+  note?: string;
 };
 
 export const EMPTY_DEVICE: DeviceSpec = { name: "", serialNumber: "" };
@@ -45,7 +47,7 @@ export const EMPTY_LOGIN: LoginCredential = { username: "", password: "" };
 
 export const DEVICE_FIELDS = [
   { key: "laptop", label: "Laptop" },
-  { key: "desktop", label: "Desktop" },
+  { key: "desktop", label: "Monitor" },
   { key: "keyboard", label: "Keyboard" },
   { key: "mouse", label: "Mouse" },
   { key: "cpu", label: "CPU" },
@@ -62,6 +64,7 @@ export type SystemSpecsFormState = {
   cpu: DeviceSpec[];
   ramGb: string;
   logins: LoginCredential[];
+  note: string;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -179,6 +182,7 @@ export function emptySystemSpecsForm(): SystemSpecsFormState {
     cpu: [{ ...EMPTY_DEVICE }],
     ramGb: "1",
     logins: [{ ...EMPTY_LOGIN }],
+    note: "",
   };
 }
 
@@ -193,5 +197,6 @@ export function recordToFormState(record: SystemSpecsRecord | null): SystemSpecs
     cpu: normalizeDeviceList(record.cpu),
     ramGb: record.ramGb?.trim() || "1",
     logins: normalizeLoginList(record.logins),
+    note: record.note?.trim() || "",
   };
 }
