@@ -6,6 +6,7 @@ import { Megaphone } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/auth-provider";
 import { canManageEmployees } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
@@ -110,13 +111,37 @@ export function DashboardAnnouncements({
 
   if (showLoading) {
     return (
-      <div
+      <section
         className={cn(
-          "border-ex-border bg-ex-surface/50 h-full min-h-[9.5rem] animate-pulse rounded-xl border",
+          "border-ex-border bg-ex-elevated flex h-full min-h-[9.5rem] flex-col rounded-xl border p-3 shadow-sm dark:shadow-none",
           className,
         )}
-        aria-hidden
-      />
+        aria-busy
+        aria-live="polite"
+        aria-label="Loading announcements"
+      >
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+          <Skeleton className="h-3 w-36 rounded-md" />
+          <Skeleton className="h-3 w-14 rounded-md" />
+        </div>
+        <div className="bg-ex-secondary/5 flex min-h-0 flex-1 flex-col rounded-lg border px-2.5 py-2.5">
+          <div className="flex items-start gap-2.5">
+            <Skeleton className="mt-0.5 size-7 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-4 w-40 max-w-[55%] rounded-md" />
+              </div>
+              <Skeleton className="h-3 w-full rounded-md" />
+              <Skeleton className="h-3 w-3/4 max-w-sm rounded-md" />
+              <div className="flex items-center justify-between gap-2 pt-0.5">
+                <Skeleton className="h-3 w-32 rounded-md" />
+                <Skeleton className="h-3 w-24 rounded-md" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     );
   }
 

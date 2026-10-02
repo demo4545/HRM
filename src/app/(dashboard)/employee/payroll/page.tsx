@@ -9,7 +9,10 @@ import { AccessDenied } from "@/components/ui/access-denied";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
+import { Label } from "@/components/ui/label";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
+import { DEFAULT_PAGE_SIZE, Pagination } from "@/components/ui/pagination";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/auth-provider";
 import { readResponseJson } from "@/lib/api/read-response-json";
@@ -22,6 +25,7 @@ import {
   PAYROLL_FUTURE_YEARS,
 } from "@/lib/attendance/period-options";
 import { PAYROLL_DAY_CODE_LEGEND } from "@/lib/payroll/constants";
+import type { SheetPagination } from "@/types/sheet";
 import type { Column } from "@/types/table";
 
 type DeductionBucket = { payable: number; employeeCount: number };
@@ -89,7 +93,7 @@ type PayrollApiResponse = {
 
 type TableRow = {
   id: string;
-  employeeId: string;
+  // employeeId: string;
   name: string;
   designation: string;
   totalSalary: string;
@@ -194,6 +198,8 @@ export default function PayrollPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PayrollApiResponse | null>(null);
+  const [employeeFilter, setEmployeeFilter] = useState("");
+  const [page, setPage] = useState(1);
 
   const periods = useMemo(() => {
     const now = new Date();
@@ -209,6 +215,7 @@ export default function PayrollPage() {
     if (nextYear == null || nextMonth == null) return;
     setYear(nextYear);
     setMonth(clampMonthForYear(nextYear, nextMonth, periods) ?? nextMonth);
+    setPage(1);
   };
 
   const loadPayroll = useCallback(async () => {
@@ -249,7 +256,6 @@ export default function PayrollPage() {
       if (!payroll) {
         return {
           id: employee.id,
-          employeeId: employee.employeeId || "—",
           name: employee.name || "—",
           designation: formatDesignation(employee.designation ?? ""),
           totalSalary: "—",
@@ -274,7 +280,6 @@ export default function PayrollPage() {
 
       return {
         id: employee.id,
-        employeeId: employee.employeeId || "—",
         name: employee.name || "—",
         designation: formatDesignation(employee.designation ?? ""),
         totalSalary: formatInr(payroll.monthlySalary),
@@ -301,9 +306,47 @@ export default function PayrollPage() {
     });
   }, [data?.employees]);
 
+  const employeeOptions = useMemo(
+    () =>
+      tableRows
+        .map((row) => ({
+          value: row.id,
+          label: row.name,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" })),
+    [tableRows],
+  );
+
+  const selectedEmployeeFilter = useMemo(() => {
+    if (!employeeFilter) return "";
+    return employeeOptions.some((option) => option.value === employeeFilter) ? employeeFilter : "";
+  }, [employeeFilter, employeeOptions]);
+
+  const filteredRows = useMemo(() => {
+    if (!selectedEmployeeFilter) return tableRows;
+    return tableRows.filter((row) => row.id === selectedEmployeeFilter);
+  }, [tableRows, selectedEmployeeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / DEFAULT_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+
+  const pagination = useMemo<SheetPagination>(
+    () => ({
+      page: currentPage,
+      pageSize: DEFAULT_PAGE_SIZE,
+      total: filteredRows.length,
+      totalPages,
+    }),
+    [currentPage, filteredRows.length, totalPages],
+  );
+
+  const pagedRows = useMemo(() => {
+    const start = (currentPage - 1) * DEFAULT_PAGE_SIZE;
+    return filteredRows.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [filteredRows, currentPage]);
+
   const columns: Column<TableRow>[] = useMemo(
     () => [
-      { key: "employeeId", header: "Employee ID", sortable: true },
       { key: "name", header: "Name", sortable: true },
       {
         key: "designation",
@@ -367,7 +410,7 @@ export default function PayrollPage() {
     <div className="space-y-8">
       <PageHeader
         title="Payroll"
-        description="Final pay = pro-rated basic + HRA + organization allowance + approved OT − unpaid leave − salary advance − loyalty − PT − LWF. Loyalty is salary-history % of full basic (not reduced by working days). PT and LWF come from salary history. Paid / Sick / Casual leave do not deduct."
+        description="Final Pay = Pro-Rated Basic Salary + Approved OT + Other Earnings − LWP Deduction − Salary Advance − Loyalty Bonus Deduction − PT − LWF − Other Deductions"
         actions={
           <div className="flex flex-wrap items-end gap-2">
             <MonthYearPicker
@@ -522,23 +565,57 @@ export default function PayrollPage() {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-ex-primary text-base font-semibold">Employee Payroll Breakdown</h2>
-        <p className="text-ex-muted text-sm">
-          Day codes:{" "}
-          {PAYROLL_DAY_CODE_LEGEND.map((item, index) => (
-            <span key={item.code}>
-              {index > 0 ? " · " : null}
-              <span className="text-ex-primary font-medium">{item.code}</span> = {item.label}
-            </span>
-          ))}
-        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="w-full space-y-2 sm:max-w-xs">
+            <Label htmlFor="payroll-employee-filter">Employee</Label>
+            <SearchableSelect
+              id="payroll-employee-filter"
+              value={selectedEmployeeFilter}
+              onChange={(value) => {
+                setEmployeeFilter(value);
+                setPage(1);
+              }}
+              placeholder="All Employees"
+              searchPlaceholder="Search Employee…"
+              emptyMessage="No Employees Found"
+              disabled={loading || employeeOptions.length === 0}
+              options={[
+                { value: "", label: "All Employees" },
+                ...employeeOptions,
+              ]}
+            />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-ex-primary text-base font-medium">Employee Payroll Breakdown</h2>
+            <p className="text-ex-muted text-sm">
+              Day Codes:{" "}
+              {PAYROLL_DAY_CODE_LEGEND.map((item, index) => (
+                <span key={item.code}>
+                  {index > 0 ? " · " : null}
+                  <span className="text-ex-primary font-medium">{item.code}</span> = {item.label}
+                </span>
+              ))}
+            </p>
+          </div>
+        </div>
         <DataTable
           columns={columns}
-          rows={tableRows}
+          rows={pagedRows}
           loading={loading}
           emptyTitle="No Payroll Rows"
-          emptyDescription="Active employees with a configured salary for this period will appear here."
+          emptyDescription={
+            selectedEmployeeFilter
+              ? "No payroll row matches the selected employee for this period."
+              : "Active employees with a configured salary for this period will appear here."
+          }
         />
+        {!loading && filteredRows.length > DEFAULT_PAGE_SIZE ? (
+          <Pagination
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="employees"
+          />
+        ) : null}
       </div>
 
       <p className="text-ex-muted text-sm">
