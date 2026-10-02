@@ -50,7 +50,7 @@ export const GET = withActiveSession(async (_req, user) => {
     return NextResponse.json(
       {
         success: false,
-        message: toApiErrorMessage(error, "Failed to load complaints"),
+        message: toApiErrorMessage(error, "Failed to load help desk tickets"),
       },
       { status: 500 },
     );
@@ -72,7 +72,7 @@ export const POST = withActiveSession(async (req, user) => {
       return NextResponse.json(
         {
           success: false,
-          message: "Subject, category, severity, and complaint details are required",
+          message: "Subject, category, priority, and ticket details are required",
         },
         { status: 400 },
       );
@@ -96,7 +96,7 @@ export const POST = withActiveSession(async (req, user) => {
     return NextResponse.json(
       {
         success: false,
-        message: toApiErrorMessage(error, "Failed to submit complaint"),
+        message: toApiErrorMessage(error, "Failed to submit ticket"),
       },
       { status: 500 },
     );
@@ -121,7 +121,7 @@ export const PATCH = withActiveSession(async (req, user) => {
     const reviewNote = String(body.reviewNote ?? "").trim();
     if (!id || (status !== "Approved" && status !== "Rejected")) {
       return NextResponse.json(
-        { success: false, message: "Complaint id and valid review status are required" },
+        { success: false, message: "Ticket id and valid review status are required" },
         { status: 400 },
       );
     }
@@ -143,11 +143,11 @@ export const PATCH = withActiveSession(async (req, user) => {
       reviewedByName: user.name,
     });
     if (!result.complaint) {
-      return NextResponse.json({ success: false, message: "Complaint not found" }, { status: 404 });
+      return NextResponse.json({ success: false, message: "Ticket not found" }, { status: 404 });
     }
     if (result.alreadyReviewed) {
       return NextResponse.json(
-        { success: false, message: "Complaint has already been reviewed" },
+        { success: false, message: "Ticket has already been reviewed" },
         { status: 409 },
       );
     }
@@ -163,7 +163,7 @@ export const PATCH = withActiveSession(async (req, user) => {
     return NextResponse.json(
       {
         success: false,
-        message: toApiErrorMessage(error, "Failed to review complaint"),
+        message: toApiErrorMessage(error, "Failed to review ticket"),
       },
       { status: 500 },
     );

@@ -19,12 +19,12 @@ export default function ComplaintsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Complaint registration"
+        title="Complaint Registration"
         description="Track workplace issues with routing and SLAs. Super Admin and HR have elevated visibility."
       />
       <Card>
         <CardHeader>
-          <CardTitle>New complaint</CardTitle>
+          <CardTitle>New Complaint</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
@@ -36,7 +36,7 @@ export default function ComplaintsPage() {
             <Select defaultValue="workplace">
               <option value="workplace">Workplace</option>
               <option value="it">IT</option>
-              <option value="people">People & culture</option>
+              <option value="people">People & Culture</option>
             </Select>
           </div>
           <div className="space-y-2">

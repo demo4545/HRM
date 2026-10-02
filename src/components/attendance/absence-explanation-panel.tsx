@@ -39,7 +39,7 @@ function formatLeaveTypeLabel(leaveType: string): string {
     birthday: "Birthday",
     unpaid: "Unpaid",
     today: "Today",
-    unauthorized: "Unauthorized absence",
+    unauthorized: "Unauthorized Absence",
   };
   return labels[leaveType] ?? leaveType;
 }
@@ -270,17 +270,20 @@ export function AbsenceExplanationPanel({
         return;
       }
 
-      // Use groups from POST response — avoid a second GET round-trip.
+      // Use groups from POST response — avoid a second GET that can hit a stale cache.
       const nextGroups = parsed.data.groups ?? [];
       applyGroups(nextGroups);
-      setAbsenceGateSessionHint(false);
       notifyGate({
         loading: false,
         blocked: nextGroups.length > 0,
         pendingCount: nextGroups.length,
         error: null,
       });
-      onSubmittedRef.current?.();
+      // Only notify parent when the gate is fully cleared so it can refresh the punch desk
+      // without a full page reload (reload re-fetched stale pending groups intermittently).
+      if (nextGroups.length === 0) {
+        onSubmittedRef.current?.();
+      }
     } catch (submitError) {
       setError(toUserFacingActionError(submitError));
     } finally {
@@ -293,7 +296,7 @@ export function AbsenceExplanationPanel({
       <Card className="border-ex-border">
         <CardContent className="text-ex-muted flex items-center justify-center gap-2 py-10 text-sm">
           <Loader2 className="size-4 animate-spin" aria-hidden />
-          Checking attendance...
+          Checking Attendance...
         </CardContent>
       </Card>
     );
@@ -312,7 +315,7 @@ export function AbsenceExplanationPanel({
             <AlertCircle className="size-5 text-amber-700 dark:text-amber-300" aria-hidden />
           </div>
           <div>
-            <CardTitle className="text-lg">Absence explanation required</CardTitle>
+            <CardTitle className="text-lg">Absence Explanation Required</CardTitle>
             <CardDescription className="mt-1 text-sm leading-relaxed">
               Submit the reason(s) below to unlock the rest of the site. Until then, only this punch
               page is available.
@@ -341,19 +344,19 @@ export function AbsenceExplanationPanel({
                   <p className="text-ex-muted mt-1 text-xs">{reasonDescription(group)}</p>
                   {group.reasonType === "rejected_leave" && rejectedEntry ? (
                     <p className="text-ex-muted mt-2 text-xs">
-                      {formatLeaveTypeLabel(rejectedEntry.leaveType)} leave
+                      {formatLeaveTypeLabel(rejectedEntry.leaveType)} Leave
                       {rejectedEntry.duration ? ` · ${rejectedEntry.duration}` : ""}
                       {group.entries.length > 1 ? (
                         <>
                           <br />
-                          <span className="font-medium">Days in this period:</span>{" "}
+                          <span className="font-medium">Days in This Period:</span>{" "}
                           {group.entries.length}
                         </>
                       ) : null}
                       {rejectedEntry.rejectReason ? (
                         <>
                           <br />
-                          <span className="font-medium">HR rejection reason:</span>{" "}
+                          <span className="font-medium">HR Rejection Reason:</span>{" "}
                           {rejectedEntry.rejectReason}
                         </>
                       ) : null}
@@ -370,7 +373,7 @@ export function AbsenceExplanationPanel({
                 {leaveOptions.length > 0 ? (
                   <div className="space-y-2">
                     <Label htmlFor={`leave-type-${group.id}`}>
-                      Leave type
+                      Leave Type
                       {group.reasonType === "today_no_punch" ? " (optional)" : ""}
                     </Label>
                     <Select
@@ -387,12 +390,12 @@ export function AbsenceExplanationPanel({
                     >
                       <option value="">
                         {group.reasonType === "today_no_punch"
-                          ? "No leave — I will punch in"
+                          ? "No Leave — I will Punch In"
                           : "Select"}
                       </option>
                       {leaveOptions.map((option) => (
                         <option key={option} value={option}>
-                          {formatLeaveTypeLabel(option)} leave
+                          {formatLeaveTypeLabel(option)} Leave
                         </option>
                       ))}
                     </Select>
@@ -405,7 +408,7 @@ export function AbsenceExplanationPanel({
                 ) : null}
 
                 <div className="space-y-2">
-                  <Label htmlFor={`explanation-${group.id}`}>Your explanation</Label>
+                  <Label htmlFor={`explanation-${group.id}`}>Your Explanation</Label>
                   <Textarea
                     id={`explanation-${group.id}`}
                     value={value}
@@ -421,7 +424,7 @@ export function AbsenceExplanationPanel({
                   />
                   {missingRequired && value.length > 0 ? (
                     <p className="text-xs text-amber-700 dark:text-amber-300">
-                      Explanation is required.
+                      Explanation Is Required.
                     </p>
                   ) : null}
                 </div>
@@ -443,7 +446,7 @@ export function AbsenceExplanationPanel({
                   Submitting…
                 </>
               ) : (
-                "Submit explanations"
+                "Submit Explanations"
               )}
             </Button>
           </div>

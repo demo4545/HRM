@@ -19,7 +19,6 @@ import { useNotifications } from "@/contexts/notifications-provider";
 import { toUserFacingActionError } from "@/lib/api/user-facing-error";
 import { roleCanPunchInOut } from "@/lib/auth/roles";
 import { roleRequiresAbsenceExplanationGate } from "@/lib/attendance/absence-gate";
-import { readAbsenceGateSessionHint } from "@/lib/attendance/absence-gate-session";
 import { updateDailyUpdate } from "@/lib/attendance/client";
 import { WORK_MODE, WORK_MODE_OPTIONS, workModeOptionLabel } from "@/lib/attendance/constants";
 
@@ -50,19 +49,13 @@ export default function PunchPage() {
   const [dailyUpdateError, setDailyUpdateError] = useState<string | null>(null);
   const [workMode, setWorkMode] = useState<string>(WORK_MODE.FULL_DAY_ONSITE);
   // Stay blocked until the absence check finishes successfully with no pending items.
-  // Derived from the panel report so we never sync props into state via an effect.
-  const initialGateHint = readAbsenceGateSessionHint();
+  // Do not trust a login "false" hint to unhide the desk — that race can flash PunchDesk
+  // before the late-coming explanation loads, then bounce the user back to the form.
   const [absenceGate, setAbsenceGate] = useState<{
     blocked: boolean;
     error: string | null;
-  } | null>(() =>
-    showAbsenceGate
-      ? initialGateHint === false
-        ? { blocked: false, error: null }
-        : null
-      : { blocked: false, error: null },
-  );
-  const absenceGateBlocked = showAbsenceGate && (absenceGate?.blocked ?? initialGateHint !== false);
+  } | null>(() => (showAbsenceGate ? null : { blocked: false, error: null }));
+  const absenceGateBlocked = showAbsenceGate && (absenceGate?.blocked ?? true);
   const absenceGateError = showAbsenceGate ? (absenceGate?.error ?? null) : null;
 
   const targetMs = (today?.idealHours ?? 8) * 60 * 60 * 1000;
@@ -135,13 +128,13 @@ export default function PunchPage() {
     return (
       <div className="w-full space-y-6">
         <AccessDenied
-          title="Punch desk unavailable"
+          title="Punch Desk Unavailable"
           description="Punch in/out is only available for Employee and HR Manager roles."
           action={
             <Link href="/dashboard">
               <Button variant="outline" size="sm">
                 <ArrowLeft className="size-4" />
-                Back to dashboard
+                Back to Dashboard
               </Button>
             </Link>
           }
@@ -171,7 +164,7 @@ export default function PunchPage() {
             setAbsenceGate({ blocked: status.blocked, error: status.error });
           }}
           onSubmitted={() => {
-            window.location.reload();
+            void refresh();
           }}
         />
       ) : null}

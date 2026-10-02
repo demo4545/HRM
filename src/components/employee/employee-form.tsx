@@ -34,11 +34,17 @@ import {
 } from "@/lib/employee";
 import { toUserFacingActionError, toUserFacingFetchError } from "@/lib/api/user-facing-error";
 import { readResponseJson } from "@/lib/api/read-response-json";
-import { POSITIONS, ROLES } from "@/app/consts/common";
+import { ROLES } from "@/app/consts/common";
 import { useAuth } from "@/contexts/auth-provider";
 import { useNotifications } from "@/contexts/notifications-provider";
 import { canManageEmployees } from "@/lib/auth/roles";
 import { joinSkillsValue, parseSkillsValue } from "@/app/consts/tech-skills";
+import {
+  ADD_NEW_POSITION_VALUE,
+  DEFAULT_POSITION_OPTIONS,
+  ensurePositionInOptions,
+  type PositionOption,
+} from "@/lib/employee/positions";
 import { Select } from "../ui/select";
 import { resolveProfileImageSrc } from "@/lib/employee/documents";
 import { type DocumentField, FileUploaderField } from "../ui/file-uploader";
@@ -98,7 +104,8 @@ export function EmployeeForm({
   const { pushToast } = useNotifications();
   const canManage = user ? canManageEmployees(user.role) : false;
   const canEditRole = user?.role === ROLES.HR_MANAGER || user?.role === ROLES.SUPER_ADMIN;
-  const canEditLastIncrement = user?.role !== ROLES.EMPLOYEE;
+  const canEditLastIncrement =
+    user?.role !== ROLES.EMPLOYEE && user?.role !== ROLES.INTERN;
   const isEdit = mode === "edit";
 
   const [form, setForm] = useState<EmployeeFormState>(initialEmployeeForm);
@@ -106,6 +113,12 @@ export function EmployeeForm({
   const [skillSuggestions, setSkillSuggestions] = useState<string[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(true);
   const [skillsError, setSkillsError] = useState<string | null>(null);
+  const [positionOptions, setPositionOptions] =
+    useState<PositionOption[]>(DEFAULT_POSITION_OPTIONS);
+  const [positionsLoading, setPositionsLoading] = useState(true);
+  const [newPositionLabel, setNewPositionLabel] = useState("");
+  const [addingPosition, setAddingPosition] = useState(false);
+  const [showAddPosition, setShowAddPosition] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [headersLoading, setHeadersLoading] = useState(!isEdit);
   const [submitting, setSubmitting] = useState(false);
@@ -277,6 +290,108 @@ export function EmployeeForm({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        setPositionsLoading(true);
+        const response = await fetch("/api/employee/positions", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const result = await readResponseJson<{
+          success?: boolean;
+          positions?: PositionOption[];
+          message?: string;
+        }>(response, "fetch");
+
+        if (cancelled) return;
+
+        if (result.success && Array.isArray(result.positions) && result.positions.length > 0) {
+          setPositionOptions(result.positions);
+        } else {
+          setPositionOptions(DEFAULT_POSITION_OPTIONS);
+        }
+      } catch {
+        if (!cancelled) {
+          setPositionOptions(DEFAULT_POSITION_OPTIONS);
+        }
+      } finally {
+        if (!cancelled) {
+          setPositionsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const visiblePositionOptions = useMemo(
+    () => ensurePositionInOptions(positionOptions, form.position),
+    [positionOptions, form.position],
+  );
+
+  const addCustomPosition = async () => {
+    const label = newPositionLabel.trim();
+    if (!label || addingPosition) return;
+
+    setAddingPosition(true);
+    try {
+      const response = await fetch("/api/employee/positions", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const result = await readResponseJson<{
+        success?: boolean;
+        message?: string;
+        position?: PositionOption;
+        positions?: PositionOption[];
+        added?: boolean;
+      }>(response, "action");
+
+      if (!result.success || !result.position) {
+        throw new Error(result.message ?? "Failed to add position");
+      }
+
+      if (Array.isArray(result.positions) && result.positions.length > 0) {
+        setPositionOptions(result.positions);
+      } else {
+        setPositionOptions((prev) => ensurePositionInOptions(prev, result.position!.value));
+      }
+
+      setForm((prev) => ({ ...prev, position: result.position!.value }));
+      setFieldErrors((prev) => {
+        if (!prev.position) return prev;
+        const next = { ...prev };
+        delete next.position;
+        return next;
+      });
+      setNewPositionLabel("");
+      setShowAddPosition(false);
+      pushToast({
+        title: result.added === false ? "Position Already Exists" : "Position Added",
+        body:
+          result.added === false
+            ? `"${result.position.label}" is already in the list.`
+            : `"${result.position.label}" is now available for everyone.`,
+        variant: result.added === false ? "default" : "success",
+      });
+    } catch (err) {
+      pushToast({
+        title: "Could Not Add Position",
+        body: toUserFacingActionError(err),
+        variant: "error",
+      });
+    } finally {
+      setAddingPosition(false);
+    }
+  };
 
   const update =
     (field: keyof EmployeeFormState) =>
@@ -532,6 +647,7 @@ export function EmployeeForm({
                   <option value={ROLES.SUPER_ADMIN}>Super Administrator</option>
                   <option value={ROLES.HR_MANAGER}>HR Manager</option>
                   <option value={ROLES.EMPLOYEE}>Employee</option>
+                  <option value={ROLES.INTERN}>Intern</option>
                 </Select>
               </FormField>
 
@@ -560,7 +676,7 @@ export function EmployeeForm({
                 </FormField>
               </div>
 
-              <FormField label="PAN number" id="panNumber" error={fieldErrors.panNumber} optional>
+              <FormField label="PAN number" id="panNumber" error={fieldErrors.panNumber}>
                 <Input
                   id="panNumber"
                   value={form.panNumber}
@@ -568,6 +684,7 @@ export function EmployeeForm({
                   placeholder="AAAAA9999A"
                   autoComplete="off"
                   maxLength={10}
+                  required
                   aria-invalid={Boolean(fieldErrors.panNumber)}
                 />
               </FormField>
@@ -576,7 +693,6 @@ export function EmployeeForm({
                 label="Aadhaar number"
                 id="aadharNumber"
                 error={fieldErrors.aadharNumber}
-                optional
               >
                 <Input
                   id="aadharNumber"
@@ -586,12 +702,13 @@ export function EmployeeForm({
                   inputMode="numeric"
                   autoComplete="off"
                   maxLength={12}
+                  required
                   aria-invalid={Boolean(fieldErrors.aadharNumber)}
                 />
               </FormField>
 
               <FormField
-                label="Bank account number"
+                label="Bank Account Number"
                 id="bankAccountNumber"
                 error={fieldErrors.bankAccountNumber}
                 optional
@@ -628,7 +745,7 @@ export function EmployeeForm({
                 <CardTitle>Documents</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2">
-                <FormField label="PAN card (upload)" id="pancard">
+                <FormField label="PAN Card" id="pancard">
                   <FileUploaderField
                     id="pancard"
                     fileName={form.pancard}
@@ -636,7 +753,7 @@ export function EmployeeForm({
                   />
                 </FormField>
 
-                <FormField label="Aadhaar card (upload)" id="aadharCard">
+                <FormField label="Aadhaar Card" id="aadharCard">
                   <FileUploaderField
                     id="aadharCard"
                     fileName={form.aadharCard}
@@ -748,51 +865,64 @@ export function EmployeeForm({
                 </div>
 
                 <div className="space-y-2">
-                  <FormField label="Postion" id="position" error={fieldErrors.position}>
+                  <FormField label="Position" id="position" error={fieldErrors.position}>
                     <Select
                       id="position"
-                      value={form.position}
-                      onChange={update("position")}
-                      required
+                      value={showAddPosition ? ADD_NEW_POSITION_VALUE : form.position}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === ADD_NEW_POSITION_VALUE) {
+                          setShowAddPosition(true);
+                          setNewPositionLabel("");
+                          return;
+                        }
+                        setShowAddPosition(false);
+                        setNewPositionLabel("");
+                        update("position")(e);
+                      }}
+                      required={!showAddPosition}
+                      disabled={positionsLoading || submitting}
                       aria-invalid={Boolean(fieldErrors.position)}
                     >
-                      <option value="">Select</option>
-                      {[
-                        { value: POSITIONS.TRAINEE, label: "Trainee" },
-                        {
-                          value: POSITIONS.AI_ML_LLM_TRAINEE,
-                          label: "AI/ML & LLM Trainee",
-                        },
-                        { value: POSITIONS.FRONTEND_DEVELOPER, label: "Frontend Developer" },
-                        {
-                          value: POSITIONS.SENIOR_FRONTEND_DEVELOPER,
-                          label: "Senior Frontend Developer",
-                        },
-                        { value: POSITIONS.BACKEND_DEVELOPER, label: "Backend Developer" },
-                        {
-                          value: POSITIONS.SENIOR_BACKEND_DEVELOPER,
-                          label: "Senior Backend Developer",
-                        },
-                        { value: POSITIONS.FULLSTACK_DEVELOPER, label: "Fullstack Developer" },
-                        {
-                          value: POSITIONS.SENIOR_FULLSTACK_DEVELOPER,
-                          label: "Senior Fullstack Developer",
-                        },
-                        {
-                          value: POSITIONS.AI_ML_LLM_DEVELOPER,
-                          label: "AI/ML & LLM Developer",
-                        },
-                        { value: POSITIONS.HR_MANAGER, label: "HR Manager" },
-                        { value: POSITIONS.TEAM_LEAD, label: "Team Lead" },
-                        { value: POSITIONS.CEO, label: "CEO" },
-                        { value: POSITIONS.OTHER, label: "Other" },
-                      ].map((position) => (
+                      <option value="">
+                        {positionsLoading ? "Loading positions…" : "Select"}
+                      </option>
+                      {visiblePositionOptions.map((position) => (
                         <option key={position.value} value={position.value}>
                           {position.label}
                         </option>
                       ))}
+                      {canManage ? (
+                        <option value={ADD_NEW_POSITION_VALUE}>Add new position</option>
+                      ) : null}
                     </Select>
                   </FormField>
+                  {canManage && showAddPosition ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Input
+                        value={newPositionLabel}
+                        onChange={(e) => setNewPositionLabel(e.target.value)}
+                        placeholder="Enter new position name"
+                        disabled={addingPosition || submitting}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void addCustomPosition();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={addingPosition || submitting || !newPositionLabel.trim()}
+                        onClick={() => void addCustomPosition()}
+                        className="shrink-0"
+                      >
+                        {addingPosition ? "Adding…" : "Add Position"}
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2">

@@ -4,22 +4,35 @@ import { z } from "zod";
 import { submitAbsenceExplanations } from "@/lib/attendance/absence-explanation";
 import { roleRequiresAbsenceExplanationGate } from "@/lib/attendance/absence-gate";
 import {
-  applyAbsenceGateCookie,
   getPendingAbsenceGroupsForUser,
   invalidateAbsenceExplanationCache,
 } from "@/lib/attendance/absence-gate-sync";
 import {
   ABSENCE_GATE_COOKIE,
+  ABSENCE_GATE_SUPPRESS_COOKIE,
   isAbsenceGateCookieActive,
+  readAbsenceGateSuppressDates,
   setAbsenceGateCookie,
+  setAbsenceGateSuppressCookie,
 } from "@/lib/attendance/absence-gate-cookie";
 import { resolveAttendanceEmployee } from "@/lib/attendance/employee";
-import {
-  getCachedAbsenceGroups,
-  setCachedAbsenceGroups,
-} from "@/lib/attendance/absence-explanation-cache";
+import { setCachedAbsenceGroups } from "@/lib/attendance/absence-explanation-cache";
 import { withActiveSession } from "@/lib/auth/api-guard";
 import { toApiErrorMessage } from "@/lib/api/user-facing-error";
+import type { PendingAbsenceGroup } from "@/lib/attendance/absence-explanation";
+
+function filterSuppressedGroups(
+  groups: PendingAbsenceGroup[],
+  suppressedDates: Set<string>,
+): PendingAbsenceGroup[] {
+  if (suppressedDates.size === 0) return groups;
+  return groups
+    .map((group) => ({
+      ...group,
+      entries: group.entries.filter((entry) => !suppressedDates.has(entry.dateIso)),
+    }))
+    .filter((group) => group.entries.length > 0);
+}
 
 const submitSchema = z.object({
   submissions: z
@@ -53,39 +66,33 @@ export const GET = withActiveSession(async (req, user) => {
   try {
     const forceRefresh = req.headers.get("x-absence-gate-refresh") === "1";
     const gateCookie = req.cookies.get(ABSENCE_GATE_COOKIE)?.value;
+    const suppressedDates = readAbsenceGateSuppressDates(
+      req.cookies.get(ABSENCE_GATE_SUPPRESS_COOKIE)?.value,
+    );
 
+    // Cookie was cleared after a successful submit (or login bootstrap). Never return a
+    // stale non-empty in-memory cache from another instance — that re-shows the form and
+    // re-activates the gate. Recompute from storage so login still discovers real pending.
     if (!forceRefresh && !isAbsenceGateCookieActive(gateCookie)) {
-      const employee = await resolveAttendanceEmployee(user);
-      if (employee?.employeeId) {
-        const cached = getCachedAbsenceGroups(employee.employeeId);
-        if (cached) {
-          const res = NextResponse.json({
-            success: true,
-            groups: cached,
-            requiresExplanation: cached.length > 0,
-          });
-          await applyAbsenceGateCookie(res, user);
-          return res;
-        }
-
-        setCachedAbsenceGroups(employee.employeeId, []);
-        const res = NextResponse.json({
-          success: true,
-          groups: [],
-          requiresExplanation: false,
-        });
-        setAbsenceGateCookie(res, false);
-        return res;
-      }
+      const fresh = await getPendingAbsenceGroupsForUser(user, { forceRefresh: true });
+      const groups = filterSuppressedGroups(fresh, suppressedDates);
+      const res = NextResponse.json({
+        success: true,
+        groups,
+        requiresExplanation: groups.length > 0,
+      });
+      setAbsenceGateCookie(res, groups.length > 0);
+      return res;
     }
 
-    const groups = await getPendingAbsenceGroupsForUser(user, { forceRefresh });
+    const fresh = await getPendingAbsenceGroupsForUser(user, { forceRefresh });
+    const groups = filterSuppressedGroups(fresh, suppressedDates);
     const res = NextResponse.json({
       success: true,
       groups,
       requiresExplanation: groups.length > 0,
     });
-    await applyAbsenceGateCookie(res, user);
+    setAbsenceGateCookie(res, groups.length > 0);
     return res;
   } catch (error) {
     console.error("[absence-explanation GET]", error);
@@ -120,13 +127,31 @@ export const POST = withActiveSession(async (req, user) => {
       );
     }
 
+    const submittedGroupIds = new Set(parsed.data.submissions.map((item) => item.groupId));
+    const submittedDates = new Set(
+      parsed.data.submissions.flatMap((item) => {
+        const dates = item.entryDates?.filter(Boolean) ?? [];
+        if (dates.length > 0) return dates;
+        if (item.dateFromIso) return [item.dateFromIso];
+        return [];
+      }),
+    );
+
     await submitAbsenceExplanations({
       employee,
       submissions: parsed.data.submissions,
     });
 
     invalidateAbsenceExplanationCache(employee.employeeId);
-    const groups = await getPendingAbsenceGroupsForUser(user, { forceRefresh: true });
+    // Sheets (and multi-instance memory caches) can lag right after write. Treat just-submitted
+    // groups/dates as cleared so the client is not bounced back to the same form.
+    const freshGroups = await getPendingAbsenceGroupsForUser(user, { forceRefresh: true });
+    const groups = freshGroups.filter(
+      (group) =>
+        !submittedGroupIds.has(group.id) &&
+        !group.entries.some((entry) => submittedDates.has(entry.dateIso)),
+    );
+    setCachedAbsenceGroups(employee.employeeId, groups);
 
     const res = NextResponse.json({
       success: true,
@@ -134,7 +159,8 @@ export const POST = withActiveSession(async (req, user) => {
       requiresExplanation: groups.length > 0,
       groups,
     });
-    await applyAbsenceGateCookie(res, user, { forceRefresh: true });
+    setAbsenceGateCookie(res, groups.length > 0);
+    setAbsenceGateSuppressCookie(res, [...submittedDates]);
     return res;
   } catch (error) {
     console.error("[absence-explanation POST]", error);

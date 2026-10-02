@@ -61,9 +61,8 @@ export function formatParentRelationshipLabel(value: string): string {
 
 const POSITION_ACRONYMS = new Set(["hr", "ai", "ml", "llm", "ceo", "qa", "ui", "ux"]);
 
-/** Display label for stored position keys such as `hr_manager` → `HR Manager`. */
-export function formatEmployeePositionLabel(position: string): string {
-  const trimmed = String(position ?? "").trim();
+function formatKeyedLabel(value: string): string {
+  const trimmed = String(value ?? "").trim();
   if (!trimmed) return "";
   return trimmed
     .split(/[_\s]+/)
@@ -74,6 +73,16 @@ export function formatEmployeePositionLabel(position: string): string {
       return lower.charAt(0).toUpperCase() + lower.slice(1);
     })
     .join(" ");
+}
+
+/** Display label for stored position keys such as `hr_manager` → `HR Manager`. */
+export function formatEmployeePositionLabel(position: string): string {
+  return formatKeyedLabel(position);
+}
+
+/** Display label for stored role keys such as `hr` → `HR`. */
+export function formatEmployeeRoleLabel(role: string): string {
+  return formatKeyedLabel(role);
 }
 
 /** Maps normalized sheet header → form field key */

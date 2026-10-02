@@ -528,13 +528,17 @@ export function validateEmployeeForm(
   }
 
   const pan = form.panNumber.replace(/\s/g, "").toUpperCase();
-  if (pan && !isValidPan(pan)) {
-    errors.panNumber = "Enter a valid PAN (e.g. ABCDE1234F), or leave blank.";
+  if (!pan) {
+    errors.panNumber = "PAN number is required.";
+  } else if (!isValidPan(pan)) {
+    errors.panNumber = "Enter a valid PAN (e.g. ABCDE1234F).";
   }
 
   const aadhaar = form.aadharNumber.replace(/\D/g, "");
-  if (aadhaar && !isValidAadhaar(aadhaar)) {
-    errors.aadharNumber = "Enter a valid 12-digit Aadhaar number, or leave blank.";
+  if (!aadhaar) {
+    errors.aadharNumber = "Aadhaar number is required.";
+  } else if (!isValidAadhaar(aadhaar)) {
+    errors.aadharNumber = "Enter a valid 12-digit Aadhaar number.";
   }
 
   const bankAccount = form.bankAccountNumber.replace(/\D/g, "");

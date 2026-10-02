@@ -12,7 +12,13 @@ import { Pagination } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-provider";
-import { DEFAULT_PAGE_SIZE, pickSheetRowFields, resolveProfileImageSrc } from "@/lib/employee";
+import {
+  DEFAULT_PAGE_SIZE,
+  formatEmployeePositionLabel,
+  formatEmployeeRoleLabel,
+  pickSheetRowFields,
+  resolveProfileImageSrc,
+} from "@/lib/employee";
 import { Input } from "@/components/ui/input";
 import { ROLES, STATUS } from "@/app/consts/common";
 import { EMPLOYEE_LIST_COLUMNS } from "@/app/consts/employee-list";
@@ -69,14 +75,10 @@ function buildListColumns(canManage: boolean): Column<EmployeeRow>[] {
         ),
       }),
       ...(key === "role" && {
-        render: (row: EmployeeRow) => (
-          <span className="capitalize">{row.role.split("_").join(" ")}</span>
-        ),
+        render: (row: EmployeeRow) => <span>{formatEmployeeRoleLabel(row.role)}</span>,
       }),
       ...(key === "position" && {
-        render: (row: EmployeeRow) => (
-          <span className="capitalize">{row.position.split("_").join(" ")}</span>
-        ),
+        render: (row: EmployeeRow) => <span>{formatEmployeePositionLabel(row.position)}</span>,
       }),
       ...(key === "contactNumber" && {
         render: (row: EmployeeRow) => (

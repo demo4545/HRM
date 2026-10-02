@@ -511,7 +511,7 @@ export default function NetworkAccessSettingsPage() {
                 <p className="text-ex-muted text-sm">Loading…</p>
               ) : networks.length === 0 ? (
                 <p className="text-ex-muted text-sm">
-                  No office IPs yet. Connect to each office Wi‑Fi and use “Add my current IP”.
+                  No office IPs yet. Connect to each office Wi‑Fi and use “Add My Current IP”.
                 </p>
               ) : (
                 networks.map((network) => (

@@ -131,7 +131,7 @@ export default function OfferLetterPage() {
                   <option value="">{loading ? "Loading Employees…" : "Select Employee"}</option>
                   {employees.map((employee) => (
                     <option key={employee.sheetRow} value={employee.sheetRow}>
-                      {employee.name} ({employee.employeeId})
+                      {employee.name}
                     </option>
                   ))}
                 </Select>
@@ -148,7 +148,7 @@ export default function OfferLetterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="commencementDate">Commencement date</Label>
+                <Label htmlFor="commencementDate">Joining Date</Label>
                 <Input
                   id="commencementDate"
                   type="date"
@@ -194,7 +194,7 @@ export default function OfferLetterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="salaryEffectiveDate">Salary effective from</Label>
+                <Label htmlFor="salaryEffectiveDate">Salary Effective From</Label>
                 <Input
                   id="salaryEffectiveDate"
                   type="date"

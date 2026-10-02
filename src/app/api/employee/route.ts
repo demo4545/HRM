@@ -159,6 +159,7 @@ export const GET = withActiveSession(async (req, user) => {
       page,
       pageSize,
       excludeInactive: !canViewFullDetails,
+      excludeSuperAdmin: true,
     });
 
     const safeData = redactPasswordsFromSheetData(data);

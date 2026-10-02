@@ -5,7 +5,7 @@ import { TableSkeleton } from "@/components/ui/skeleton";
 import type { Column, SortOrder } from "@/types/table";
 
 function TableEmptyState({
-  title = "No data found",
+  title = "No Data Found",
   description = "There are no records to display at the moment.",
   action,
   className,

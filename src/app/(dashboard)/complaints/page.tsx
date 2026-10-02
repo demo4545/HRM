@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/auth-provider";
 import { useNotifications } from "@/contexts/notifications-provider";
@@ -72,13 +73,39 @@ async function fetchComplaintRecords(): Promise<ComplaintRecord[]> {
   return data.complaints ?? [];
 }
 
+function TicketListSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="divide-ex-border divide-y" aria-busy aria-label="Loading help desk tickets">
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="space-y-4 px-5 py-5">
+          <div className="flex gap-3">
+            <Skeleton className="size-10 shrink-0 rounded-xl" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Skeleton className="h-5 w-48 rounded-md" />
+                <Skeleton className="h-5 w-16 rounded-md" />
+                <Skeleton className="h-5 w-24 rounded-md" />
+              </div>
+              <Skeleton className="h-3 w-56 max-w-full rounded-md" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full rounded-md" />
+            <Skeleton className="h-4 w-11/12 max-w-xl rounded-md" />
+            <Skeleton className="h-4 w-3/4 max-w-md rounded-md" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ComplaintsPage() {
   const { user } = useAuth();
   const { refresh: refreshNotifications, pushToast } = useNotifications();
   const canReview = user ? canManageEmployees(user.role) : false;
   const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState<ComplaintCategory>("workplace");
   const [severity, setSeverity] = useState<ComplaintSeverity>("normal");
@@ -88,17 +115,20 @@ export default function ComplaintsPage() {
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [reviewingId, setReviewingId] = useState<string | null>(null);
 
-  const loadComplaints = useCallback(async () => {
+  const loadTickets = useCallback(async () => {
     try {
       setLoading(true);
       setComplaints(await fetchComplaintRecords());
-      setError(null);
     } catch (loadError) {
-      setError(toUserFacingFetchError(loadError));
+      pushToast({
+        title: "Couldn’t Load Tickets",
+        body: toUserFacingFetchError(loadError),
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pushToast]);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,12 +136,15 @@ export default function ComplaintsPage() {
       .then((items) => {
         if (!cancelled) {
           setComplaints(items);
-          setError(null);
         }
       })
       .catch((loadError: unknown) => {
         if (!cancelled) {
-          setError(toUserFacingFetchError(loadError));
+          pushToast({
+            title: "Couldn’t Load Tickets",
+            body: toUserFacingFetchError(loadError),
+            variant: "error",
+          });
         }
       })
       .finally(() => {
@@ -120,25 +153,28 @@ export default function ComplaintsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pushToast]);
 
-  const visibleComplaints = useMemo(
+  const visibleTickets = useMemo(
     () =>
       statusFilter === "All"
         ? complaints
-        : complaints.filter((complaint) => complaint.status === statusFilter),
+        : complaints.filter((ticket) => ticket.status === statusFilter),
     [complaints, statusFilter],
   );
-  const pendingCount = complaints.filter((complaint) => complaint.status === "Pending").length;
+  const pendingCount = complaints.filter((ticket) => ticket.status === "Pending").length;
 
-  const submitComplaint = async () => {
+  const submitTicket = async () => {
     if (!subject.trim() || !details.trim()) {
-      setError("Subject and complaint details are required.");
+      pushToast({
+        title: "Missing Details",
+        body: "Subject and ticket details are required.",
+        variant: "error",
+      });
       return;
     }
 
     setSubmitting(true);
-    setError(null);
     try {
       const response = await fetch("/api/complaints", {
         method: "POST",
@@ -157,63 +193,74 @@ export default function ComplaintsPage() {
         complaint?: ComplaintRecord;
       }>(response, "action");
       if (!response.ok || !data.success || !data.complaint) {
-        throw new Error(data.message ?? "Failed to submit complaint");
+        throw new Error(data.message ?? "Failed to submit ticket");
       }
       setSubject("");
       setCategory("workplace");
       setSeverity("normal");
       setDetails("");
       pushToast({
-        title: "Complaint Submitted",
-        body: "Your complaint was sent to HR and Super Admin for review.",
+        title: "Ticket Submitted",
+        body: "Your help desk ticket was sent to HR and Super Admin for review.",
         href: "/complaints",
         variant: "success",
       });
-      await Promise.all([loadComplaints(), refreshNotifications()]);
+      await Promise.all([loadTickets(), refreshNotifications()]);
     } catch (submitError) {
-      setError(toUserFacingActionError(submitError));
+      pushToast({
+        title: "Couldn’t Submit Ticket",
+        body: toUserFacingActionError(submitError),
+        variant: "error",
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const review = async (complaint: ComplaintRecord, status: "Approved" | "Rejected") => {
-    const reviewNote = String(reviewNotes[complaint.id] ?? "").trim();
+  const review = async (ticket: ComplaintRecord, status: "Approved" | "Rejected") => {
+    const reviewNote = String(reviewNotes[ticket.id] ?? "").trim();
     if (status === "Rejected" && !reviewNote) {
-      setError("Enter a reason before rejecting the complaint.");
+      pushToast({
+        title: "Reason Required",
+        body: "Enter a reason before rejecting the ticket.",
+        variant: "error",
+      });
       return;
     }
 
-    setReviewingId(complaint.id);
-    setError(null);
+    setReviewingId(ticket.id);
     try {
       const response = await fetch("/api/complaints", {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: complaint.id, status, reviewNote }),
+        body: JSON.stringify({ id: ticket.id, status, reviewNote }),
       });
       const data = await readResponseJson<{ success?: boolean; message?: string }>(
         response,
         "action",
       );
       if (!response.ok || !data.success) {
-        throw new Error(data.message ?? "Failed to review complaint");
+        throw new Error(data.message ?? "Failed to review ticket");
       }
       setReviewNotes((current) => {
         const next = { ...current };
-        delete next[complaint.id];
+        delete next[ticket.id];
         return next;
       });
       pushToast({
-        title: `Complaint ${status.toLowerCase()}`,
-        body: `${complaint.submitterName}'s complaint has been ${status.toLowerCase()}.`,
+        title: `Ticket ${status.toLowerCase()}`,
+        body: `${ticket.submitterName}'s ticket has been ${status.toLowerCase()}.`,
         href: "/complaints",
         variant: "success",
       });
-      await Promise.all([loadComplaints(), refreshNotifications()]);
+      await Promise.all([loadTickets(), refreshNotifications()]);
     } catch (reviewError) {
-      setError(toUserFacingActionError(reviewError));
+      pushToast({
+        title: "Couldn’t Update Ticket",
+        body: toUserFacingActionError(reviewError),
+        variant: "error",
+      });
     } finally {
       setReviewingId(null);
     }
@@ -222,17 +269,17 @@ export default function ComplaintsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Complaints"
+        title="Help Desk"
         description={
           canReview
-            ? "Review employee concerns and record the action taken."
-            : "Raise workplace concerns and track their review status."
+            ? "Review and resolve employee help desk tickets."
+            : "Raise a ticket for workplace issues and track its status."
         }
         actions={
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void loadComplaints()}
+            onClick={() => void loadTickets()}
             disabled={loading}
           >
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
@@ -244,9 +291,9 @@ export default function ComplaintsPage() {
       {!canReview ? (
         <Card>
           <CardHeader>
-            <CardTitle>Submit Complaint</CardTitle>
+            <CardTitle>Raise Ticket</CardTitle>
             <p className="text-ex-muted mt-1 text-sm">
-              HR and Super Admin will be notified after submission.
+              HR and Super Admin will be notified after you submit.
             </p>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
@@ -255,7 +302,7 @@ export default function ComplaintsPage() {
               <Input
                 value={subject}
                 maxLength={120}
-                placeholder="Briefly describe the concern"
+                placeholder="Briefly describe the issue"
                 onChange={(event) => setSubject(event.target.value)}
               />
             </label>
@@ -284,7 +331,7 @@ export default function ComplaintsPage() {
               </Select>
             </label>
             <label className="space-y-1.5 md:col-span-2">
-              <Label>Complaint details</Label>
+              <Label>Ticket details</Label>
               <Textarea
                 rows={5}
                 value={details}
@@ -297,27 +344,25 @@ export default function ComplaintsPage() {
             <Button
               className="w-fit md:col-span-2"
               disabled={submitting}
-              onClick={() => void submitComplaint()}
+              onClick={() => void submitTicket()}
             >
               <Send className="size-4" />
-              {submitting ? "Submitting…" : "Submit complaint"}
+              {submitting ? "Submitting…" : "Submit"}
             </Button>
           </CardContent>
         </Card>
       ) : null}
 
-      {error ? (
-        <p className="border-ex-banner-danger-border bg-ex-banner-danger-bg text-ex-banner-danger-fg rounded-lg border px-4 py-3 text-sm">
-          {error}
-        </p>
-      ) : null}
-
       <Card className="overflow-hidden">
         <CardHeader className="bg-ex-surface/40 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle>{canReview ? "Complaint Review Queue" : "My Complaints"}</CardTitle>
+            <CardTitle>{canReview ? "Ticket Queue" : "My Tickets"}</CardTitle>
             <p className="text-ex-muted mt-1 text-sm">
-              {canReview ? `${pendingCount} Complaints Awaiting Action` : "Your Submission History"}
+              {loading
+                ? "Loading…"
+                : canReview
+                  ? `${pendingCount} ticket${pendingCount === 1 ? "" : "s"} awaiting action`
+                  : "Your submitted help desk tickets"}
             </p>
           </div>
           <div className="bg-ex-elevated flex w-fit rounded-lg p-1">
@@ -326,11 +371,13 @@ export default function ComplaintsPage() {
                 key={status}
                 type="button"
                 onClick={() => setStatusFilter(status)}
+                disabled={loading}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-sm font-medium transition",
                   statusFilter === status
                     ? "bg-ex-surface text-ex-primary shadow-sm"
                     : "text-ex-muted hover:text-ex-primary",
+                  loading && "cursor-not-allowed opacity-60",
                 )}
               >
                 {status}
@@ -340,25 +387,27 @@ export default function ComplaintsPage() {
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <p className="text-ex-muted px-5 py-10 text-sm">Loading Complaints…</p>
-          ) : visibleComplaints.length === 0 ? (
+            <TicketListSkeleton rows={3} />
+          ) : visibleTickets.length === 0 ? (
             <div className="px-5 py-14 text-center">
               <MessageSquareWarning className="text-ex-muted/50 mx-auto size-8" />
-              <p className="mt-3 font-medium">No {statusFilter.toLowerCase()} Complaints</p>
+              <p className="mt-3 font-medium">
+                No {statusFilter === "All" ? "" : `${statusFilter} `}Tickets
+              </p>
               <p className="text-ex-muted mt-1 text-sm">
-                Complaints matching this status will appear here.
+                Help desk tickets matching this filter will appear here.
               </p>
             </div>
           ) : (
             <div className="divide-ex-border divide-y">
-              {visibleComplaints.map((complaint) => (
-                <article key={complaint.id} className="space-y-4 px-5 py-5">
+              {visibleTickets.map((ticket) => (
+                <article key={ticket.id} className="space-y-4 px-5 py-5">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex min-w-0 gap-3">
                       <div
                         className={cn(
                           "flex size-10 shrink-0 items-center justify-center rounded-xl",
-                          complaint.severity === "high"
+                          ticket.severity === "high"
                             ? "bg-rose-500/15 text-rose-600"
                             : "bg-amber-500/15 text-amber-700",
                         )}
@@ -367,68 +416,66 @@ export default function ComplaintsPage() {
                       </div>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold">{complaint.subject}</h3>
-                          <Badge variant={statusVariant(complaint.status)}>
-                            {complaint.status}
-                          </Badge>
-                          <Badge variant="default">{complaint.severity} priority</Badge>
+                          <h3 className="font-semibold">{ticket.subject}</h3>
+                          <Badge variant={statusVariant(ticket.status)}>{ticket.status}</Badge>
+                          <Badge variant="default">{ticket.severity.toUpperCase()} Priority</Badge>
                         </div>
                         <p className="text-ex-muted mt-1 text-sm">
-                          {canReview ? `${complaint.submitterName} · ` : ""}
-                          {categoryLabel(complaint.category)} · {formatDate(complaint.createdAt)}
+                          {canReview ? `${ticket.submitterName} · ` : ""}
+                          {categoryLabel(ticket.category)} · {formatDate(ticket.createdAt)}
                         </p>
                       </div>
                     </div>
                   </div>
                   <p className="text-ex-primary text-sm leading-6 whitespace-pre-wrap">
-                    {complaint.details}
+                    {ticket.details}
                   </p>
 
-                  {complaint.status !== "Pending" ? (
+                  {ticket.status !== "Pending" ? (
                     <div
                       className={cn(
                         "rounded-lg border px-4 py-3 text-sm",
-                        complaint.status === "Approved"
+                        ticket.status === "Approved"
                           ? "border-emerald-500/25 bg-emerald-500/8"
                           : "border-rose-500/25 bg-rose-500/8",
                       )}
                     >
                       <div className="flex items-center gap-2 font-medium">
-                        {complaint.status === "Approved" ? (
+                        {ticket.status === "Approved" ? (
                           <CheckCircle2 className="size-4 text-emerald-600" />
                         ) : (
                           <XCircle className="size-4 text-rose-600" />
                         )}
-                        {complaint.status} by {complaint.reviewedByName || "HR"}
+                        {ticket.status} by {ticket.reviewedByName || "HR"}
                       </div>
-                      {complaint.reviewNote ? (
-                        <p className="text-ex-muted mt-1">{complaint.reviewNote}</p>
+                      {ticket.reviewNote ? (
+                        <p className="text-ex-muted mt-1">{ticket.reviewNote}</p>
                       ) : null}
                     </div>
                   ) : canReview ? (
                     <div className="border-ex-border bg-ex-surface/40 rounded-xl border p-4">
-                      <Label htmlFor={`review-${complaint.id}`}>
+                      <Label htmlFor={`review-${ticket.id}`}>
                         Review note <span className="text-ex-muted">(required for rejection)</span>
                       </Label>
                       <Textarea
-                        id={`review-${complaint.id}`}
+                        id={`review-${ticket.id}`}
                         rows={3}
                         maxLength={1000}
                         className="mt-2"
-                        value={reviewNotes[complaint.id] ?? ""}
-                        placeholder="Record the action to take or reason for rejection"
+                        value={reviewNotes[ticket.id] ?? ""}
+                        placeholder="Record the action taken or reason for rejection"
                         onChange={(event) =>
                           setReviewNotes((current) => ({
                             ...current,
-                            [complaint.id]: event.target.value,
+                            [ticket.id]: event.target.value,
                           }))
                         }
                       />
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button
                           size="sm"
-                          disabled={reviewingId === complaint.id}
-                          onClick={() => void review(complaint, "Approved")}
+                          disabled={reviewingId === ticket.id}
+                          onClick={() => void review(ticket, "Approved")}
                         >
                           <CheckCircle2 className="size-4" />
                           Approve
@@ -436,8 +483,8 @@ export default function ComplaintsPage() {
                         <Button
                           size="sm"
                           variant="danger"
-                          disabled={reviewingId === complaint.id}
-                          onClick={() => void review(complaint, "Rejected")}
+                          disabled={reviewingId === ticket.id}
+                          onClick={() => void review(ticket, "Rejected")}
                         >
                           <XCircle className="size-4" />
                           Reject

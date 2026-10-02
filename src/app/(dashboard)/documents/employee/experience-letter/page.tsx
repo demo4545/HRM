@@ -179,7 +179,7 @@ export default function ExperienceLetterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="issueDate">Letter date</Label>
+                <Label htmlFor="issueDate">Issue Date</Label>
                 <Input
                   id="issueDate"
                   type="date"

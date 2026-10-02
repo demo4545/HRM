@@ -13,6 +13,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ROLES } from "@/app/consts/common";
 import { useAuth } from "@/contexts/auth-provider";
 import { useNotifications } from "@/contexts/notifications-provider";
@@ -831,17 +832,20 @@ export default function SalarySlipsPage() {
           />
           <div className="w-auto min-w-48 flex-1 sm:flex-none">
             <label className="text-ex-muted mb-1 block text-xs font-medium">Employee</label>
-            <Select
+            <SearchableSelect
               value={selectedGenerateEmployee}
-              onChange={(e) => setTargetEmployee(e.target.value)}
-            >
-              <option value="">All with Effective Salary</option>
-              {generateEligibleEmployees.map((e) => (
-                <option key={e.sheetRow} value={e.sheetRow}>
-                  {e.name}
-                </option>
-              ))}
-            </Select>
+              onChange={setTargetEmployee}
+              placeholder="All With Effective Salary"
+              searchPlaceholder="Search Employee…"
+              emptyMessage="No Employees Found"
+              options={[
+                { value: "", label: "All With Effective Salary" },
+                ...generateEligibleEmployees.map((e) => ({
+                  value: e.sheetRow,
+                  label: e.name,
+                })),
+              ]}
+            />
           </div>
           <Button
             variant="outline"
@@ -922,24 +926,26 @@ export default function SalarySlipsPage() {
                 <p className="text-ex-muted mt-1.5 max-w-sm text-sm leading-relaxed">
                   Select Employee
                 </p>
-                <Select
+                <SearchableSelect
                   value={historyEmployeeSheetRow}
-                  onChange={(e) => {
-                    const sheetRow = e.target.value;
+                  onChange={(sheetRow) => {
                     setHistoryEmployeeSheetRow(sheetRow);
                     setEditingHistorySheetRow(null);
                     const employee = employees.find((item) => item.sheetRow === sheetRow);
                     setBasic(employee?.salary ?? "");
                     setEffectiveFrom("");
                   }}
-                >
-                  <option value="">All</option>
-                  {employees.map((e) => (
-                    <option key={e.sheetRow} value={e.sheetRow}>
-                      {e.name}
-                    </option>
-                  ))}
-                </Select>
+                  placeholder="All"
+                  searchPlaceholder="Search Employee…"
+                  emptyMessage="No Employees Found"
+                  options={[
+                    { value: "", label: "All" },
+                    ...employees.map((e) => ({
+                      value: e.sheetRow,
+                      label: e.name,
+                    })),
+                  ]}
+                />
               </div>
               <div>
                 <p className="text-ex-muted mt-1.5 max-w-sm text-sm leading-relaxed">

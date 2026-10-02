@@ -7,6 +7,7 @@ export const ROLES: Record<string, string> = {
   SUPER_ADMIN: "super_admin",
   HR_MANAGER: "hr",
   EMPLOYEE: "employee",
+  INTERN: "intern",
 };
 
 export const POSITIONS: Record<string, string> = {

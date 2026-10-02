@@ -404,7 +404,7 @@ export function AttendanceHistoryView({
           key={`${hrFormMode}-${hrFormRow?.id ?? hrFormDate ?? "new"}`}
           employeeLabel={
             selectedEmployee
-              ? `${selectedEmployee.name}${selectedEmployee.employeeId ? ` (${selectedEmployee.employeeId})` : ""}`
+              ? `${selectedEmployee.name}`
               : undefined
           }
           initialDate={hrFormDate}
@@ -421,17 +421,17 @@ export function AttendanceHistoryView({
           <StatCard
             label="Completed"
             value={String(summary.completed)}
-            hint={`${IDEAL_WORKING_HOURS}h Target Met`}
+            hint=""
           />
           <StatCard
             label="Approved Overtime"
             value={summary.approvedOvertime}
-            hint="Accepted This Month"
+            hint=""
           />
           <StatCard
             label="OT Approved Days"
             value={String(summary.overtimeApproved)}
-            hint="Rows Approved"
+            hint=""
           />
         </div>
       ) : null}
