@@ -1,3 +1,7 @@
+import {
+  formatLeaveDurationDisplay,
+  isHalfDayLeaveDuration,
+} from "@/lib/attendance/leave-display";
 import { parseLeaveDisplayDate } from "@/lib/attendance/leave-range-display";
 import { sendLeaveReviewedEmail } from "@/lib/email/leave-emails";
 import type { EmailDeliveryResult } from "@/lib/email/types";
@@ -14,6 +18,8 @@ export type LeaveNotificationContext = {
   employeeEmail?: string;
   leaveType: string;
   dateRange: string;
+  /** Leave bucket duration label, e.g. Full Day, Half Day (AM). */
+  duration?: string;
   reason?: string;
   applicationId?: string;
   /** When set, notification copy reflects punch-gate absence backfill. */
@@ -103,10 +109,13 @@ export async function notifyLeaveReviewed(params: {
   const expiresAt = resolveLeaveNotificationExpiresAt(context.dateRange);
   const type = isApproved ? NOTIFICATION_TYPES.LEAVE_APPROVED : NOTIFICATION_TYPES.LEAVE_REJECTED;
   const leaveLabel = formatLeaveTypeLabel(context.leaveType);
+  const durationLabel = formatLeaveDurationDisplay(context.duration);
+  const halfDay = isHalfDayLeaveDuration(context.duration);
+  const durationPhrase = halfDay ? `${durationLabel.toLowerCase()} ` : "full-day ";
 
   let body = isApproved
-    ? `Your ${leaveLabel} leave request for ${context.dateRange} has been approved.`
-    : `Your ${leaveLabel} leave request for ${context.dateRange} has been rejected.`;
+    ? `Your ${leaveLabel} ${durationPhrase}leave request for ${context.dateRange} has been approved (${durationLabel}).`
+    : `Your ${leaveLabel} ${durationPhrase}leave request for ${context.dateRange} has been rejected (${durationLabel}).`;
 
   if (!isApproved && rejectReason?.trim()) {
     body += ` Reason: ${rejectReason.trim()}`;
@@ -122,7 +131,13 @@ export async function notifyLeaveReviewed(params: {
       recipientSheetRow: context.employeeSheetRow,
       recipientEmployeeId: context.employeeId,
       type,
-      title: isApproved ? "Your leave is approved" : "Your leave is rejected",
+      title: isApproved
+        ? halfDay
+          ? "Your half-day leave is approved"
+          : "Your full-day leave is approved"
+        : halfDay
+          ? "Your half-day leave is rejected"
+          : "Your full-day leave is rejected",
       body,
       href: "/leave",
       dedupeKey: context.applicationId
@@ -146,6 +161,7 @@ export async function notifyLeaveReviewed(params: {
       employeeName: context.employeeName,
       leaveType: context.leaveType,
       dateRange: context.dateRange,
+      duration: context.duration,
       status,
       rejectReason,
     });

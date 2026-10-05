@@ -106,6 +106,7 @@ export const PATCH = withActiveSession(async (req, user) => {
           employeeName: employee.employeeName,
           leaveType,
           dateRange: matchingApplication?.date ?? "your selected dates",
+          duration: matchingApplication?.duration,
           reason: matchingApplication?.reason,
           applicationId: buildLeaveApplicationId({
             employeeId: employee.employeeId,

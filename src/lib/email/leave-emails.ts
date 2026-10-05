@@ -1,3 +1,7 @@
+import {
+  formatLeaveDurationDisplay,
+  isHalfDayLeaveDuration,
+} from "@/lib/attendance/leave-display";
 import { EMPTY_COMPANY_BRANDING, getBrandingAssetBytes, getCompanyBranding } from "@/lib/branding";
 import type { CompanyBranding } from "@/lib/branding";
 import { sendEmail } from "@/lib/email/send";
@@ -54,20 +58,45 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function buildLeaveReviewedText(
-  params: {
-    employeeName: string;
-    leaveTypeLabel: string;
-    dateRange: string;
-    status: "Accepted" | "Rejected";
-    rejectReason?: string;
-  },
-  company: EmailCompany,
-): string {
+type LeaveReviewedContent = {
+  employeeName: string;
+  leaveTypeLabel: string;
+  durationLabel: string;
+  halfDay: boolean;
+  dateRange: string;
+  status: "Accepted" | "Rejected";
+  rejectReason?: string;
+};
+
+function leaveReviewSubject(status: "Accepted" | "Rejected", halfDay: boolean): string {
+  if (status === "Accepted") {
+    return halfDay ? "Your half-day leave is approved" : "Your full-day leave is approved";
+  }
+  return halfDay ? "Your half-day leave is rejected" : "Your full-day leave is rejected";
+}
+
+function leaveReviewBadge(status: "Accepted" | "Rejected", halfDay: boolean): string {
+  const statusLabel = status === "Accepted" ? "Approved" : "Rejected";
+  const dayLabel = halfDay ? "Half-day leave" : "Full-day leave";
+  return `${dayLabel} ${statusLabel}`;
+}
+
+function leaveReviewHeadline(status: "Accepted" | "Rejected", halfDay: boolean): string {
+  if (status === "Accepted") {
+    return halfDay ? "Your half-day leave was approved" : "Your full-day leave was approved";
+  }
+  return halfDay ? "Your half-day leave was rejected" : "Your full-day leave was rejected";
+}
+
+function buildLeaveReviewedText(params: LeaveReviewedContent, company: EmailCompany): string {
   const isApproved = params.status === "Accepted";
+  const durationPhrase = params.halfDay
+    ? `${params.durationLabel.toLowerCase()} `
+    : "full-day ";
+
   let body = isApproved
-    ? `Hi ${params.employeeName},\n\nYour ${params.leaveTypeLabel} leave request for ${params.dateRange} has been approved.`
-    : `Hi ${params.employeeName},\n\nYour ${params.leaveTypeLabel} leave request for ${params.dateRange} has been rejected.`;
+    ? `Hi ${params.employeeName},\n\nYour ${params.leaveTypeLabel} ${durationPhrase}leave request for ${params.dateRange} has been approved.\n\nDuration: ${params.durationLabel}.`
+    : `Hi ${params.employeeName},\n\nYour ${params.leaveTypeLabel} ${durationPhrase}leave request for ${params.dateRange} has been rejected.\n\nDuration: ${params.durationLabel}.`;
 
   if (!isApproved && params.rejectReason?.trim()) {
     body += `\n\nReason: ${params.rejectReason.trim()}`;
@@ -85,24 +114,18 @@ function buildLeaveReviewedText(
   return body;
 }
 
-function buildLeaveReviewedHtml(
-  params: {
-    employeeName: string;
-    leaveTypeLabel: string;
-    dateRange: string;
-    status: "Accepted" | "Rejected";
-    rejectReason?: string;
-  },
-  company: EmailCompany,
-): string {
+function buildLeaveReviewedHtml(params: LeaveReviewedContent, company: EmailCompany): string {
   const isApproved = params.status === "Accepted";
   const statusLabel = isApproved ? "Approved" : "Rejected";
   const statusColor = isApproved ? "#15803d" : "#b91c1c";
   const statusBg = isApproved ? "#dcfce7" : "#fee2e2";
   const accent = isApproved ? "#16a34a" : "#dc2626";
+  const badgeLabel = leaveReviewBadge(params.status, params.halfDay);
+  const headline = leaveReviewHeadline(params.status, params.halfDay);
 
   const name = escapeHtml(params.employeeName);
   const leaveLabel = escapeHtml(params.leaveTypeLabel);
+  const durationLabel = escapeHtml(params.durationLabel);
   const dateRange = escapeHtml(params.dateRange);
   const dateFieldLabel = params.dateRange.includes(" - ") ? "Dates" : "Date";
   const reason = escapeHtml(params.rejectReason?.trim() || "");
@@ -115,7 +138,7 @@ function buildLeaveReviewedHtml(
   const websiteDisplay = escapeHtml(
     normalizeWebsiteHref(company.websiteUrl).replace(/^https?:\/\//i, ""),
   );
-  const subject = isApproved ? "Your leave is approved" : "Your leave is rejected";
+  const subject = leaveReviewSubject(params.status, params.halfDay);
 
   const reasonBlock =
     !isApproved && reason
@@ -212,10 +235,10 @@ function buildLeaveReviewedHtml(
           <tr>
             <td style="padding:28px 32px 8px;font-family:Arial,Helvetica,sans-serif;">
               <div style="display:inline-block;padding:6px 12px;border-radius:999px;background:${statusBg};color:${statusColor};font-size:12px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;">
-                Leave ${statusLabel}
+                ${escapeHtml(badgeLabel)}
               </div>
               <h1 style="margin:16px 0 0;font-size:22px;line-height:1.3;color:#0f172a;font-weight:700;">
-                ${isApproved ? "Your leave request was approved" : "Your leave request was rejected"}
+                ${escapeHtml(headline)}
               </h1>
             </td>
           </tr>
@@ -226,8 +249,10 @@ function buildLeaveReviewedHtml(
           </tr>
           <tr>
             <td style="padding:0 32px 18px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#334155;">
-              Your <strong>${leaveLabel}</strong> leave request for <strong>${dateRange}</strong> has been
+              Your <strong>${leaveLabel}</strong> <strong>${durationLabel}</strong> leave request for
+              <strong>${dateRange}</strong> has been
               <strong style="color:${accent};">${statusLabel.toLowerCase()}</strong>.
+              ${params.halfDay ? "This is a half-day leave." : "This is a full-day leave."}
             </td>
           </tr>
           <tr>
@@ -236,6 +261,10 @@ function buildLeaveReviewedHtml(
                 <tr>
                   <td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#64748b;width:40%;">Leave type</td>
                   <td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0f172a;font-weight:600;">${leaveLabel}</td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#64748b;border-top:1px solid #e2e8f0;">Duration</td>
+                  <td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0f172a;font-weight:600;border-top:1px solid #e2e8f0;">${durationLabel}</td>
                 </tr>
                 <tr>
                   <td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#64748b;border-top:1px solid #e2e8f0;">${dateFieldLabel}</td>
@@ -278,19 +307,24 @@ export async function sendLeaveReviewedEmail(params: {
   employeeName: string;
   leaveType: string;
   dateRange: string;
+  duration?: string;
   status: "Accepted" | "Rejected";
   rejectReason?: string;
 }): Promise<EmailDeliveryResult> {
   const leaveTypeLabel = formatLeaveTypeLabel(params.leaveType);
+  const durationLabel = formatLeaveDurationDisplay(params.duration);
+  const halfDay = isHalfDayLeaveDuration(params.duration);
   const branding = await getCompanyBranding().catch(() => EMPTY_COMPANY_BRANDING);
 
   const logoAsset = branding.hasLogo ? await getBrandingAssetBytes("logo").catch(() => null) : null;
   const hasInlineLogo = Boolean(logoAsset?.buffer?.length);
   const company = toEmailCompany(branding, hasInlineLogo);
 
-  const content = {
+  const content: LeaveReviewedContent = {
     employeeName: params.employeeName,
     leaveTypeLabel,
+    durationLabel,
+    halfDay,
     dateRange: params.dateRange,
     status: params.status,
     rejectReason: params.rejectReason,
@@ -298,7 +332,7 @@ export async function sendLeaveReviewedEmail(params: {
 
   return sendEmail({
     to: params.to,
-    subject: params.status === "Accepted" ? "Your leave is approved" : "Your leave is rejected",
+    subject: leaveReviewSubject(params.status, halfDay),
     text: buildLeaveReviewedText(content, company),
     html: buildLeaveReviewedHtml(content, company),
     attachments:
