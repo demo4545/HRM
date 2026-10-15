@@ -15,7 +15,6 @@ import {
 } from "@/lib/attendance/employee";
 import { sheetRowToForm } from "@/lib/employee";
 import { listAllEmployeeRows } from "@/lib/employees/repository";
-import { listCompanyHolidays } from "@/lib/company-holidays/repository";
 import { listLeaveApplications } from "@/lib/attendance/leave-approvals";
 import { LEAVE_STATUS } from "@/lib/attendance/leave-status";
 import { formatGoogleApiClientMessage } from "@/lib/google/drive-auth";
@@ -58,10 +57,9 @@ export const GET = withActiveSession(async (req, user) => {
       return NextResponse.json({ success: false, message: "Invalid month" }, { status: 400 });
     }
 
-    const [employeeRecords, holidays, salaryHistory, advanceDeductions, overtimeRequests] =
+    const [employeeRecords, salaryHistory, advanceDeductions, overtimeRequests] =
       await Promise.all([
         listAllEmployeeRows(),
-        listCompanyHolidays(year),
         listSalaryHistoryRecords(),
         mapSalaryAdvanceDeductionsForPeriod(year, month),
         listOvertimeRequests({}).catch((error) => {
@@ -87,7 +85,7 @@ export const GET = withActiveSession(async (req, user) => {
       });
     }
 
-    const scheduledDates = listScheduledWorkingDates(year, month, holidays);
+    const scheduledDates = listScheduledWorkingDates(year, month);
     const workingDays = scheduledDates.length;
     const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
     const periodEnd = `${year}-${String(month).padStart(2, "0")}-${String(getDaysInMonth(year, month)).padStart(2, "0")}`;
@@ -347,7 +345,6 @@ export const GET = withActiveSession(async (req, user) => {
         month,
         workingDays,
         scheduledDates,
-        leaveHolidaysExcluded: holidays.filter((h) => h.type === "leave").map((h) => h.date),
       },
       summary,
       deductions: {
