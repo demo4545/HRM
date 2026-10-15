@@ -25,7 +25,6 @@ import {
 import { listLeaveApplications } from "@/lib/attendance/leave-approvals";
 import { LEAVE_STATUS } from "@/lib/attendance/leave-status";
 import { listOvertimeRequests } from "@/lib/attendance/overtime-requests";
-import { listCompanyHolidays } from "@/lib/company-holidays/repository";
 import {
   DEFAULT_LWF,
   DEFAULT_PROFESSIONAL_TAX,
@@ -169,17 +168,16 @@ export const POST = withActiveSession(async (req, user) => {
       return NextResponse.json({ success: false, message: "No employees found" }, { status: 400 });
     }
 
-    const [allSlips, salaryHistory, holidays, overtimeRequests] = await Promise.all([
+    const [allSlips, salaryHistory, overtimeRequests] = await Promise.all([
       listSalarySlips(),
       listSalaryHistoryRecords(),
-      listCompanyHolidays(year),
       listOvertimeRequests({}).catch((error) => {
         console.error("Salary slip overtime request load failed", error);
         return [];
       }),
     ]);
 
-    const scheduledDates = listScheduledWorkingDates(year, month, holidays);
+    const scheduledDates = listScheduledWorkingDates(year, month);
     const workingDays = scheduledDates.length;
     const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
     const periodEnd = `${year}-${String(month).padStart(2, "0")}-${String(getDaysInMonth(year, month)).padStart(2, "0")}`;

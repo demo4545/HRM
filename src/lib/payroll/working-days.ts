@@ -1,4 +1,8 @@
-import type { CompanyHoliday } from "@/lib/company-holidays";
+/**
+ * Calendar helpers for payroll / salary working-day schedules.
+ * Working days = Monday–Friday only. Public holidays and festivals on weekdays
+ * still count as working days.
+ */
 
 export function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
@@ -15,31 +19,19 @@ export function isWeekend(year: number, month: number, day: number): boolean {
 }
 
 /**
- * Scheduled working days for a month: Monday–Friday only,
- * excluding company holidays whose type is `leave` (celebrations still count).
+ * Scheduled working days for a month: Monday–Friday only.
+ * Public holidays / festivals on weekdays are included.
  */
-export function listScheduledWorkingDates(
-  year: number,
-  month: number,
-  holidays: Pick<CompanyHoliday, "date" | "type">[],
-): string[] {
-  const leaveHolidayDates = new Set(holidays.filter((h) => h.type === "leave").map((h) => h.date));
-
+export function listScheduledWorkingDates(year: number, month: number): string[] {
   const dates: string[] = [];
   const days = getDaysInMonth(year, month);
   for (let day = 1; day <= days; day += 1) {
     if (isWeekend(year, month, day)) continue;
-    const iso = toIsoDate(year, month, day);
-    if (leaveHolidayDates.has(iso)) continue;
-    dates.push(iso);
+    dates.push(toIsoDate(year, month, day));
   }
   return dates;
 }
 
-export function countScheduledWorkingDays(
-  year: number,
-  month: number,
-  holidays: Pick<CompanyHoliday, "date" | "type">[],
-): number {
-  return listScheduledWorkingDates(year, month, holidays).length;
+export function countScheduledWorkingDays(year: number, month: number): number {
+  return listScheduledWorkingDates(year, month).length;
 }
